@@ -1,16 +1,11 @@
 import express from "express";
+import apiRoutes from "./routes/index.js"
 
 const app = express();
 
 app.use(express.json({limit: "100kb"}));
 
-app.get("/api/health", (req, res) => {
-    res.json({
-        status: "ok",
-        project: "NYC Transit Hub",
-        team: "Greybox",
-    });
-});
+app.use("/api", apiRoutes);
 
 // Unmatched routes return JSON
 app.use((req, res) => {
