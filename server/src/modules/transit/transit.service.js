@@ -18,7 +18,7 @@ export async function getStations() {
     }
 
     const url = new URL("https://data.ny.gov/resource/39hk-dx4f.json");
-    url.searchParams.set("$limit", "5");
+    url.searchParams.set("$limit", "5000");
     url.searchParams.set("$order", "gtfs_stop_id");
 
     const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
