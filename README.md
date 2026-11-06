@@ -24,7 +24,7 @@ git --version
 ## 3. First-time setup
 
 ```bash
-git clone -b feat/interactive-map https://github.com/zDz08/greybox-nyc-transit-hub.git
+git clone https://github.com/zDz08/greybox-nyc-transit-hub.git
 cd greybox-nyc-transit-hub
 npm ci --prefix server
 npm ci --prefix client
