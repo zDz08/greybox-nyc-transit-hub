@@ -8,6 +8,7 @@ maplibregl.setWorkerUrl(workerUrl);
 
 export default function TransitMap() {
     const containerRef = useRef(null);
+    const mapRef = useRef(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
@@ -19,6 +20,7 @@ export default function TransitMap() {
             center: [-73.989, 40.746],
             zoom: 12,
         });
+        mapRef.current = map;
 
         map.addControl(new maplibregl.NavigationControl(), "top-right");
 
@@ -56,8 +58,20 @@ export default function TransitMap() {
         return () => {
             controller.abort();
             map.remove();
+            mapRef.current = null;
         };
 }, []);
+
+useEffect(() => {
+    const map = mapRef.current;
+    if(!map || !selectedStation) return;
+
+    map.easeTo({
+        center: selectedStation.geometry.coordinates,
+        zoom: Math.max(map.getZoom(), 14),
+        duration: 500,
+    });
+}, [selectedStation]);
 
 const searchTerm = query.trim().toLowerCase();
 
