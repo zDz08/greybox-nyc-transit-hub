@@ -1,0 +1,51 @@
+.transit-map {
+  position: relative;
+}
+
+.transit-map__canvas {
+  width: 100%;
+  height: 75svh;
+}
+
+.station-card {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 36px;
+  padding: 16px;
+  border: 1px solid #35404c;
+  border-radius: 20px;
+  background: #161b22;
+  color: #f0f3f6;
+  font-family: system-ui, sans-serif;
+}
+
+.station-card h2,
+.station-card p {
+  margin: 0 0 8px;
+}
+
+.station-card p:last-child {
+  margin-bottom: 0;
+}
+
+.station-card button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: #ffc247;
+  color: #161b22;
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (min-width: 768px) {
+  .station-card {
+    top: 16px;
+    left: 16px;
+    right: auto;
+    bottom: auto;
+    width: 280px;
+  }
+}

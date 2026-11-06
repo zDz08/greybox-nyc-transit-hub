@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import "./TransitMap.css";
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -56,18 +57,20 @@ export default function TransitMap() {
 }, []);
 
     return (
-        <section>
-            <div ref={containerRef} style={{width: "100%", height: "70vh"}} />
+        <section className="transit-map">
+            <div ref={containerRef} className="transit-map__canvas" />
 
-            {selectedStation ? (
-                <div>
+            <aside className="station-card" aria-label="Station details">
+                {selectedStation ? (
+                <>
                     <h2>{selectedStation.properties.name}</h2>
                     <p>Routes: {selectedStation.properties.routes.join(", ")}</p>
                     <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
-                </div>
+                </>
                 ) : (
                     <p>Select a station on the map.</p>
                 )}
+            </aside>
         </section>
     );
 }
