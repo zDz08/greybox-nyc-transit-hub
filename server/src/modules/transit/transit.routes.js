@@ -12,7 +12,7 @@ router.get("/stations", async(req, res, next) => {
             return res.status(503).json({
                 error: {
                     code: error.code,
-                    message: "Only mock transit data is avaliable right now",
+                    message: "Unsupported transit data mode. Use mock or open-data.",
                 },
             });
         }
