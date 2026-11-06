@@ -11,7 +11,7 @@ export const mockStations = {
                 coordinates: [-73.9875, 40.7553],
             },
             properties: {
-                if: "mock-times-square",
+                id: "mock-times-square",
                 name: "Times Sq-42 St",
                 routes: ["N", "Q", "R", "W"],
             },
