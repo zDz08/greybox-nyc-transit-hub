@@ -18,7 +18,36 @@ export default function TransitMap() {
 
         map.addControl(new maplibregl.NavigationControl(), "top-right");
 
-        return () => map.remove();
+        const controller = new AbortController();
+
+        async function loadStations() {
+            try {
+                const response = await fetch("/api/transit/stations", {
+                    signal: controller.signal,
+                });
+
+                if(!response.ok) {
+                    throw new Error(`Station request failed: ${response.status}`);
+                }
+
+                const result = await response.json();
+
+                for(const station of result.data.features) {
+                    new maplibregl.Marker({color: "#ffc247"}).setLngLat(station.geometry.coordinates).addTo(map);
+                }
+            }catch(error) {
+                if(error.name !== "AbortError") {
+                    console.error("Could not load stations:", error);
+                }
+            }
+        }
+
+        loadStations();
+
+        return () => {
+            controller.abort();
+            map.remove();
+        };
 }, []);
 
     return <div ref={containerRef} style={{width: "100%", height: "70vh"}} />;
