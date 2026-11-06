@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
@@ -7,6 +7,7 @@ maplibregl.setWorkerUrl(workerUrl);
 
 export default function TransitMap() {
     const containerRef = useRef(null);
+    const [selectedStation, setSelectedStation] = useState(null);
 
     useEffect(() => {
         const map = new maplibregl.Map({
@@ -33,7 +34,11 @@ export default function TransitMap() {
                 const result = await response.json();
 
                 for(const station of result.data.features) {
-                    new maplibregl.Marker({color: "#ffc247"}).setLngLat(station.geometry.coordinates).addTo(map);
+                    const marker = new maplibregl.Marker({color: "#ffc247"}).setLngLat(station.geometry.coordinates).addTo(map);
+
+                    marker.getElement().addEventListener("click", () => {
+                        setSelectedStation(station);
+                    });
                 }
             }catch(error) {
                 if(error.name !== "AbortError") {
@@ -50,5 +55,19 @@ export default function TransitMap() {
         };
 }, []);
 
-    return <div ref={containerRef} style={{width: "100%", height: "70vh"}} />;
+    return (
+        <section>
+            <div ref={containerRef} style={{width: "100%", height: "70vh"}} />
+
+            {selectedStation ? (
+                <div>
+                    <h2>{selectedStation.properties.name}</h2>
+                    <p>Routes: {selectedStation.properties.routes.join(", ")}</p>
+                    <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
+                </div>
+                ) : (
+                    <p>Select a station on the map.</p>
+                )}
+        </section>
+    );
 }
