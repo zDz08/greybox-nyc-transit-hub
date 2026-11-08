@@ -2,25 +2,38 @@ import React, { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import "./TransitMap.css";
+import "./transitMap.css";
 
 maplibregl.setWorkerUrl(workerUrl);
 
 export default function TransitMap() {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
+    const markerElementsRef = useRef(new Map());
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
+    const [stationStatus, setStationStatus] = useState("loading");
 
     useEffect(() => {
         const map = new maplibregl.Map({
             container: containerRef.current,
-            style: "https://demotiles.maplibre.org/style.json",
+            style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
             center: [-73.989, 40.746],
             zoom: 12,
         });
         mapRef.current = map;
+        map.on("load", () => {
+            for(const layer of map.getStyle().layers) {
+                if(layer.type === "symbol") {
+                    map.setLayerZoomRange(
+                        layer.id,
+                        Math.max(layer.minizoom ?? 0, 14),
+                        layer.maxzoom ?? 24
+                    );
+                }
+            }
+        });
 
         map.addControl(new maplibregl.NavigationControl(), "top-right");
 
@@ -40,15 +53,28 @@ export default function TransitMap() {
                 setStations(result.data.features);
 
                 for(const station of result.data.features) {
-                    const marker = new maplibregl.Marker({color: "#ffc247"}).setLngLat(station.geometry.coordinates).addTo(map);
+                    const element = document.createElement("div");
+                    element.className = "station-dot";
 
-                    marker.getElement().addEventListener("click", () => {
+                    element.addEventListener("click", () => {
                         setSelectedStation(station);
+                        setQuery("");
                     });
+
+                    new maplibregl.Marker({
+                        element,
+                        anchor: "center",
+                    }).setLngLat(station.geometry.coordinates).addTo(map);
+
+                    markerElementsRef.current.set(station.properties.id, element);
                 }
+
+                setStationStatus("ready");
+
             }catch(error) {
                 if(error.name !== "AbortError") {
                     console.error("Could not load stations:", error);
+                    setStationStatus("error");
                 }
             }
         }
@@ -58,11 +84,15 @@ export default function TransitMap() {
         return () => {
             controller.abort();
             map.remove();
+            markerElementsRef.current.clear();
             mapRef.current = null;
         };
 }, []);
 
 useEffect(() => {
+    for(const [stationId, element] of markerElementsRef.current) {
+        element.classList.toggle("is-selected", stationId === selectedStation?.properties.id);
+    }
     const map = mapRef.current;
     if(!map || !selectedStation) return;
 
@@ -88,8 +118,9 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                     placeholder="Search stations..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
+                    disabled={stationStatus !== "ready"}
                 />
-                {searchTerm && (
+                {stationStatus === "ready" &&searchTerm && (
                     <div className="station-search__results">
                         {matches.length === 0 ? (
                             <p>No stations found.</p>
@@ -108,14 +139,22 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                 )}
             </div>
             <aside className="station-card" aria-label="Station details">
-                {selectedStation ? (
-                <>
-                    <h2>{selectedStation.properties.name}</h2>
-                    <p>Routes: {selectedStation.properties.routes.join(", ")}</p>
-                    <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
-                </>
-                ) : (
-                    <p>Select a station on the map.</p>
+                {stationStatus === "loading" && (<p role="status">Loading stations...</p>)}
+
+                {stationStatus === "error" && (<p role="alert">Could not load stations. Please refresh the page to try again.</p>)}
+
+                {stationStatus === "ready" && (
+                    selectedStation ? (
+                    <>
+                        <h2>{selectedStation.properties.name}</h2>
+                        <p>Routes: {selectedStation.properties.routes.join(", ")}</p>
+                        <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
+                    </>
+                    ) : (
+                        <p>
+                            {stations.length === 0 ? "No stations available." : "Select a station on the map or search for one."}
+                        </p>
+                    )
                 )}
             </aside>
         </section>
