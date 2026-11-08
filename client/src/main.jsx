@@ -1,6 +1,6 @@
 import React from "react";
 import { createRoot } from "react-dom/client";
-import TransitMap from "./TransitMap.jsx";
+import TransitMap from "./transitMap.jsx";
 
 function App() {
   return (
