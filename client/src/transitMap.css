@@ -111,20 +111,54 @@
 }
 
 .station-dot {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+}
+
+.station-dot::before {
+    content: "";
     box-sizing: border-box;
     width: 12px;
     height: 12px;
     border: 2px solid #e5e9ef;
     border-radius: 50%;
     background: #111820;
-    cursor: pointer;
+    pointer-events: none;
 }
 
 .station-dot.is-selected {
+    z-index: 1;
+}
+
+.station-dot.is-selected::before {
     width: 22px;
     height: 22px;
     border: 3px solid #ffc247;
-    background: #111820;
     box-shadow: 0 0 0 6px rgb(255 194 71 / 20%);
-    z-index: 1;
+}
+
+.station-routes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.station-card .route-button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 2px solid #657180;
+    border-radius: 50%;
+    background: #202832;
+    color: #f0f3f6;
+}
+
+.station-card .route-button[aria-pressed="true"] {
+    border-color: #ffc247;
+    background: #ffc247;
+    color: #111820;
 }

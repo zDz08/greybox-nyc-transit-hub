@@ -14,6 +14,7 @@ export default function TransitMap() {
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
     const [stationStatus, setStationStatus] = useState("loading");
+    const [selectedRouteId, setSelectedRouteId] = useState(null);
 
     useEffect(() => {
         const map = new maplibregl.Map({
@@ -28,7 +29,7 @@ export default function TransitMap() {
                 if(layer.type === "symbol") {
                     map.setLayerZoomRange(
                         layer.id,
-                        Math.max(layer.minizoom ?? 0, 14),
+                        Math.max(layer.minizoom ?? 0, 15),
                         layer.maxzoom ?? 24
                     );
                 }
@@ -103,6 +104,10 @@ useEffect(() => {
     });
 }, [selectedStation]);
 
+useEffect(() => {
+    setSelectedRouteId(null);
+}, [selectedStation]);
+
 const searchTerm = query.trim().toLowerCase();
 
 const matches = searchTerm ? stations.filter(station => station.properties.name.toLowerCase().includes(searchTerm)) : [];
@@ -147,7 +152,24 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                     selectedStation ? (
                     <>
                         <h2>{selectedStation.properties.name}</h2>
-                        <p>Routes: {selectedStation.properties.routes.join(", ")}</p>
+                        <div className="station-routes" role="group" aria-label="Select a subway line">
+                            {selectedStation.properties.routes.map((routeId) => (
+                                <button
+                                    key={routeId}
+                                    type="button"
+                                    className="route-button"
+                                    aria-pressed={selectedRouteId === routeId}
+                                    onClick={() => setSelectedRouteId(routeId)}
+                                >
+                                    {routeId}
+                                </button>
+                            ))}
+                        </div>
+                        {selectedRouteId && (
+                            <p role="status">
+                                Selected line: {selectedRouteId}. Service alerts are not connected yet.
+                            </p>
+                        )}
                         <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
                     </>
                     ) : (
