@@ -4,7 +4,7 @@
 
 NYC Transit Hub is a team project by Greybox that helps users access NYC transit information in one place.
 
-The project is currently in the initial backend setup stage.
+The app includes an interactive subway map with station search and details. Firebase account features are available when configured.
 
 ## 2. Requirements
 
@@ -57,10 +57,10 @@ Alternatively, duplicate `.env.example` in your editor and rename the copy to `.
 | `TRANSIT_DATA_MODE` | Intended transit data mode; start with `open-data`. |
 | `MONGODB_URI` | MongoDB connection string; configure when database integration is added. |
 | `MONGODB_DB_NAME` | MongoDB database name; use `greybox_transit`. |
-| `FIREBASE_PROJECT_ID` | Firebase project ID; configure when authentication is added. |
+| `FIREBASE_PROJECT_ID` | Firebase project ID for verifying account sessions. |
 | `GOOGLE_APPLICATION_CREDENTIALS` | Local path to the Firebase/Google service account credentials file, when needed. |
 
-MongoDB and Firebase credentials can remain blank during the initial setup.
+MongoDB and Firebase settings can remain blank when running the map without accounts.
 
 ## 5. Run and Verify
 
@@ -72,3 +72,19 @@ MongoDB and Firebase credentials can remain blank during the initial setup.
 
 Keep both terminals running. Open the **Local** URL printed by Vite
 (usually http://localhost:5173).
+
+## 6. Enable sign-up and sign-in
+
+1. In the team's Firebase project, register a web app and enable the **Email/Password** sign-in provider under **Authentication**.
+2. Copy `client/.env.example` to `client/.env` and fill in the web app configuration from Firebase Project settings. Use the same project ID for `FIREBASE_PROJECT_ID` in `server/.env`.
+3. Restart both dev servers, then select **Sign in / Sign up** in the app. Firebase manages passwords and sessions. The app sends the ID token to `GET /api/auth/me` so the server can verify it and return the account identity.
+
+### Test locally without a Firebase project
+
+Create a `firebase.json` in a temporary directory with this [Auth emulator](https://firebase.google.com/docs/emulator-suite/connect_auth) configuration:
+
+```json
+{"emulators":{"auth":{"host":"127.0.0.1","port":9099},"ui":{"enabled":false}}}
+```
+
+From that directory, run `npx firebase-tools emulators:start --only auth --project demo-greybox`. In the app, use `demo-greybox` as the project ID in both env files, set `VITE_FIREBASE_API_KEY=demo-key`, and enable the emulator settings shown in both `.env.example` files. Keep `NODE_ENV=development` on the server. Restart both dev servers and register with a test email and password.

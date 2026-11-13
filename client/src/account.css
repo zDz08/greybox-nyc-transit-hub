@@ -1,0 +1,93 @@
+.app-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px 24px;
+    margin-bottom: 16px;
+}
+
+.app-header h1 {
+    margin: 0;
+}
+
+.account {
+    max-width: 100%;
+    margin: 0;
+    font: 1rem system-ui, sans-serif;
+    overflow-wrap: anywhere;
+}
+
+.account-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.account button {
+    min-height: 44px;
+    padding: 8px 14px;
+    border: 1px solid #657180;
+    border-radius: 10px;
+    background: #202832;
+    color: #f0f3f6;
+    font: inherit;
+    cursor: pointer;
+}
+
+.account button:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.account-panel {
+    box-sizing: border-box;
+    width: min(340px, 100%);
+    margin-top: 8px;
+    padding: 16px;
+    border: 1px solid #35404c;
+    border-radius: 16px;
+    background: #161b22;
+    color: #f0f3f6;
+}
+
+.account-panel h2 {
+    margin: 0 0 12px;
+    font-size: 1.25rem;
+}
+
+.account-panel fieldset,
+.account-panel label {
+    display: grid;
+    gap: 8px;
+}
+
+.account-panel fieldset {
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.account-panel input {
+    min-width: 0;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0 12px;
+    border: 1px solid #657180;
+    border-radius: 8px;
+    background: #202832;
+    color: inherit;
+    font: inherit;
+}
+
+.account-panel .account-primary {
+    border-color: #ffc247;
+    background: #ffc247;
+    color: #161b22;
+}
+
+.account-panel p {
+    margin: 0;
+    color: #ffb4a9;
+}
