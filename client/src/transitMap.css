@@ -1,23 +1,43 @@
+html {
+    min-width: 320px;
+}
+
+body {
+    margin: 0;
+    min-width: 320px;
+    font-family: system-ui, sans-serif;
+}
+
 .transit-map {
   position: relative;
+  isolation: isolate;
+  min-width: 320px;
 }
 
 .transit-map__canvas {
   width: 100%;
   height: 75svh;
+  position: relative;
+  z-index: 0;
+  min-height: 480px;
 }
 
 .station-card {
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: 36px;
+  bottom: 8px;
   padding: 16px;
   border: 1px solid #35404c;
   border-radius: 20px;
   background: #161b22;
   color: #f0f3f6;
   font-family: system-ui, sans-serif;
+  z-index: 2;
+  box-sizing: border-box;
+  max-height: calc(100% - 100px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .station-card h2,
@@ -56,7 +76,7 @@
   left: 12px;
   right: 60px;
   max-width: 320px;
-  z-index: 2;
+  z-index: 3;
 }
 
 .station-search input,
@@ -161,4 +181,44 @@
     border-color: #ffc247;
     background: #ffc247;
     color: #111820;
+}
+
+.station-dot::before {
+    transition: opacity 150ms ease;
+}
+
+.station-dot.is-dimmed:not(.is-selected)::before {
+    opacity: 0.2;
+}
+
+.route-selection {
+    margin-bottom: 12px;
+}
+
+.route-selection__note {
+    color: #aeb8c5;
+    font-size: 0.875rem;
+}
+
+.route-badge {
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
+    min-width: 44px;
+    height: 44px;
+    padding: 0 12px;
+    border: 2px solid #ffc247;
+    border-radius: 50%;
+    background: #ffc247;
+    color: #111820;
+}
+
+.app-header {
+    padding: 12px;
+}
+
+.app-header h1 {
+    font-size: clamp(1.25rem, 4vw, 2rem);
+    line-height: 1.2;
+    overflow-wrap: anywhere;
 }

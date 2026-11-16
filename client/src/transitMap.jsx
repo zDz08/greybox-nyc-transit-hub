@@ -16,12 +16,21 @@ export default function TransitMap() {
     const [stationStatus, setStationStatus] = useState("loading");
     const [selectedRouteId, setSelectedRouteId] = useState(null);
 
+    function selectStation(station) {
+        const routes = station.properties.routes;
+
+        setSelectedStation(station);
+        setSelectedRouteId(routes[0] ?? null);
+        setQuery("");
+    }
+
     useEffect(() => {
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
             center: [-73.989, 40.746],
             zoom: 12,
+            attributionControl: false,
         });
         mapRef.current = map;
         map.on("load", () => {
@@ -29,7 +38,7 @@ export default function TransitMap() {
                 if(layer.type === "symbol") {
                     map.setLayerZoomRange(
                         layer.id,
-                        Math.max(layer.minizoom ?? 0, 15),
+                        Math.max(layer.minzoom ?? 0, 15),
                         layer.maxzoom ?? 24
                     );
                 }
@@ -58,8 +67,7 @@ export default function TransitMap() {
                     element.className = "station-dot";
 
                     element.addEventListener("click", () => {
-                        setSelectedStation(station);
-                        setQuery("");
+                        selectStation(station);
                     });
 
                     new maplibregl.Marker({
@@ -105,8 +113,16 @@ useEffect(() => {
 }, [selectedStation]);
 
 useEffect(() => {
-    setSelectedRouteId(null);
-}, [selectedStation]);
+    for(const station of stations) {
+        const element = markerElementsRef.current.get(station.properties.id);
+
+        if(!element) continue;
+
+        const belongsToRoute = selectedRouteId === null || station.properties.routes.includes(selectedRouteId);
+
+        element.classList.toggle("is-dimmed", !belongsToRoute);
+    }
+}, [stations, selectedRouteId]);
 
 const searchTerm = query.trim().toLowerCase();
 
@@ -134,7 +150,7 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                                 <button
                                     key={station.properties.id}
                                     type="button"
-                                    onClick={() => {setSelectedStation(station); setQuery("");}}
+                                    onClick={() => selectStation(station)}
                                 >
                                     {station.properties.name}
                                 </button>
@@ -152,25 +168,40 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                     selectedStation ? (
                     <>
                         <h2>{selectedStation.properties.name}</h2>
-                        <div className="station-routes" role="group" aria-label="Select a subway line">
-                            {selectedStation.properties.routes.map((routeId) => (
-                                <button
-                                    key={routeId}
-                                    type="button"
-                                    className="route-button"
-                                    aria-pressed={selectedRouteId === routeId}
-                                    onClick={() => setSelectedRouteId(routeId)}
-                                >
-                                    {routeId}
-                                </button>
-                            ))}
-                        </div>
-                        {selectedRouteId && (
-                            <p role="status">
-                                Selected line: {selectedRouteId}. Service alerts are not connected yet.
-                            </p>
+                        {selectedStation.properties.routes.length > 0 ? (
+                            <div className="station-routes">
+                                {selectedStation.properties.routes.map((routeId) =>
+                                    selectedStation.properties.routes.length === 1 ? (
+                                        <span className="route-badge" key={routeId}>
+                                            {routeId}
+                                        </span>
+                                    ) : (
+                                        <button
+                                            key={routeId}
+                                            type="button"
+                                            className="route-button"
+                                            aria-pressed={selectedRouteId === routeId}
+                                            onClick={() => setSelectedRouteId(routeId)}
+                                        >
+                                            {routeId}
+                                        </button>
+                                    )
+                                )}
+                            </div>
+                        ) : (
+                            <p>No line information is available.</p>
                         )}
-                        <button type="button" onClick={() => setSelectedStation(null)}>Close</button>
+                        {selectedRouteId && (
+                            <div className="route-selection">
+                                <p role="status">
+                                    Highlighting {selectedRouteId} stations.
+                                </p>
+                                <p className="route-selection__note">
+                                    Based on daytime service. Temporary changes are not shown.
+                                </p>
+                            </div>
+                        )}
+                        <button type="button" onClick={() => {setSelectedRouteId(null); setSelectedStation(null)}}>Close</button>
                     </>
                     ) : (
                         <p>
