@@ -23,3 +23,6 @@ coverage/
 # Windows
 Thumbs.db
 Desktop.ini
+
+# Downloaded GTFS source files
+/server/data/gtfs/

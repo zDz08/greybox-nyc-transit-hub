@@ -163,24 +163,34 @@ body {
 .station-routes {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 12px;
     margin-bottom: 12px;
 }
 
-.station-card .route-button {
+.station-card .route-button,
+.route-badge {
+    box-sizing: border-box;
+    display: inline-grid;
+    place-items: center;
     min-width: 44px;
-    min-height: 44px;
+    height: 44px;
     padding: 0 12px;
-    border: 2px solid #657180;
+    border: 2px solid transparent;
     border-radius: 50%;
-    background: #202832;
-    color: #f0f3f6;
+    background: var(--route-color, #7c858c);
+    color: var(--route-text-color, #ffffff);
+    font: inherit;
+    font-weight: 700;
 }
 
-.station-card .route-button[aria-pressed="true"] {
-    border-color: #ffc247;
-    background: #ffc247;
-    color: #111820;
+.station-card .route-button {
+    cursor: pointer;
+}
+
+.station-card .route-button[aria-pressed="true"],
+.route-badge {
+    outline: 2px solid #f0f3f6;
+    outline-offset: 3px;
 }
 
 .station-dot::before {
@@ -198,19 +208,6 @@ body {
 .route-selection__note {
     color: #aeb8c5;
     font-size: 0.875rem;
-}
-
-.route-badge {
-    box-sizing: border-box;
-    display: inline-grid;
-    place-items: center;
-    min-width: 44px;
-    height: 44px;
-    padding: 0 12px;
-    border: 2px solid #ffc247;
-    border-radius: 50%;
-    background: #ffc247;
-    color: #111820;
 }
 
 .app-header {

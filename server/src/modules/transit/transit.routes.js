@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { getStations } from "./transit.service.js";
+import { getRouteShapes } from "./routeShapes.service.js"
 
 const router = Router();
 
@@ -16,6 +17,15 @@ router.get("/stations", async(req, res, next) => {
                 },
             });
         }
+        next(error);
+    }
+});
+
+router.get("/route-shapes", async (req, res, next) => {
+    try {
+        const result = await getRouteShapes();
+        res.json(result);
+    }catch(error) {
         next(error);
     }
 });

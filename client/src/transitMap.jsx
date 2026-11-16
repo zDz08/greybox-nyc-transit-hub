@@ -3,6 +3,7 @@ import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./transitMap.css";
+import { getRouteStyle } from "./routeColors";
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -15,6 +16,7 @@ export default function TransitMap() {
     const [query, setQuery] = useState("");
     const [stationStatus, setStationStatus] = useState("loading");
     const [selectedRouteId, setSelectedRouteId] = useState(null);
+    const [routeShapesReady, setRouteShapesReady] = useState(false);
 
     function selectStation(station) {
         const routes = station.properties.routes;
@@ -34,8 +36,8 @@ export default function TransitMap() {
         });
         mapRef.current = map;
         map.on("load", () => {
-            for(const layer of map.getStyle().layers) {
-                if(layer.type === "symbol") {
+            for (const layer of map.getStyle().layers) {
+                if (layer.type === "symbol") {
                     map.setLayerZoomRange(
                         layer.id,
                         Math.max(layer.minzoom ?? 0, 15),
@@ -55,14 +57,14 @@ export default function TransitMap() {
                     signal: controller.signal,
                 });
 
-                if(!response.ok) {
+                if (!response.ok) {
                     throw new Error(`Station request failed: ${response.status}`);
                 }
 
                 const result = await response.json();
                 setStations(result.data.features);
 
-                for(const station of result.data.features) {
+                for (const station of result.data.features) {
                     const element = document.createElement("div");
                     element.className = "station-dot";
 
@@ -80,8 +82,8 @@ export default function TransitMap() {
 
                 setStationStatus("ready");
 
-            }catch(error) {
-                if(error.name !== "AbortError") {
+            } catch (error) {
+                if (error.name !== "AbortError") {
                     console.error("Could not load stations:", error);
                     setStationStatus("error");
                 }
@@ -96,37 +98,128 @@ export default function TransitMap() {
             markerElementsRef.current.clear();
             mapRef.current = null;
         };
-}, []);
+    }, []);
 
-useEffect(() => {
-    for(const [stationId, element] of markerElementsRef.current) {
-        element.classList.toggle("is-selected", stationId === selectedStation?.properties.id);
-    }
-    const map = mapRef.current;
-    if(!map || !selectedStation) return;
+    useEffect(() => {
+        const map = mapRef.current;
 
-    map.easeTo({
-        center: selectedStation.geometry.coordinates,
-        zoom: Math.max(map.getZoom(), 14),
-        duration: 500,
-    });
-}, [selectedStation]);
+        if(!map) return;
 
-useEffect(() => {
-    for(const station of stations) {
-        const element = markerElementsRef.current.get(station.properties.id);
+        const controller = new AbortController();
 
-        if(!element) continue;
+        async function loadRouteShapes() {
+            try {
+                const response = await fetch("/api/transit/route-shapes", {signal: controller.signal});
 
-        const belongsToRoute = selectedRouteId === null || station.properties.routes.includes(selectedRouteId);
+                if(!response.ok) {
+                    throw new Error(`Route shapes request failed: HTTP ${response.status}`);
+                }
 
-        element.classList.toggle("is-dimmed", !belongsToRoute);
-    }
-}, [stations, selectedRouteId]);
+                const result = await response.json();
 
-const searchTerm = query.trim().toLowerCase();
+                if(controller.signal.aborted) return;
 
-const matches = searchTerm ? stations.filter(station => station.properties.name.toLowerCase().includes(searchTerm)) : [];
+                map.addSource("transit-routes", {
+                    type: "geojson",
+                    data: result.data,
+                });
+
+                map.addLayer({
+                    id: "transit-routes-base",
+                    type: "line",
+                    source: "transit-routes",
+                    layout: {
+                        "line-cap": "round",
+                        "line-join": "round",
+                    },
+                    paint: {
+                        "line-color": ["get", "color"],
+                        "line-width": 3,
+                        "line-opacity": 0.25,
+                    },
+                });
+                map.addLayer({
+                    id: "transit-routes-selected",
+                    type: "line",
+                    source: "transit-routes",
+                    filter: ["==", ["get", "routeId"], ""],
+                    layout: {
+                        "line-cap": "round",
+                        "line-join": "round",
+                    },
+                    paint: {
+                        "line-color": ["get", "color"],
+                        "line-width": 5,
+                        "line-opacity": 1,
+                    },
+                });
+
+                setRouteShapesReady(true);
+            }catch(error) {
+                if(error.name === "AbortError") return;
+                console.log("Failed to load route shapes:", error);
+            }
+        }
+        
+        if(map.isStyleLoaded()) {
+            loadRouteShapes();
+        }else {
+            map.once("load", loadRouteShapes);
+        }
+
+        return() => {
+            controller.abort();
+            map.off("load", loadRouteShapes);
+        }
+    }, []);
+
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if(!map || !routeShapesReady) return;
+
+        map.setFilter("transit-routes-selected", [
+            "==",
+            ["get", "routeId"],
+            selectedRouteId ?? "",
+        ]);
+
+        map.setLayoutProperty(
+            "transit-routes-base",
+            "visibility",
+            selectedRouteId === null ? "visible" : "none"
+        );
+    }, [selectedRouteId, routeShapesReady]);
+
+    useEffect(() => {
+        for (const [stationId, element] of markerElementsRef.current) {
+            element.classList.toggle("is-selected", stationId === selectedStation?.properties.id);
+        }
+        const map = mapRef.current;
+        if (!map || !selectedStation) return;
+
+        map.easeTo({
+            center: selectedStation.geometry.coordinates,
+            zoom: Math.max(map.getZoom(), 14),
+            duration: 500,
+        });
+    }, [selectedStation]);
+
+    useEffect(() => {
+        for (const station of stations) {
+            const element = markerElementsRef.current.get(station.properties.id);
+
+            if (!element) continue;
+
+            const belongsToRoute = selectedRouteId === null || station.properties.routes.includes(selectedRouteId);
+
+            element.classList.toggle("is-dimmed", !belongsToRoute);
+        }
+    }, [stations, selectedRouteId]);
+
+    const searchTerm = query.trim().toLowerCase();
+
+    const matches = searchTerm ? stations.filter(station => station.properties.name.toLowerCase().includes(searchTerm)) : [];
 
     return (
         <section className="transit-map">
@@ -141,7 +234,7 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
                     onChange={(e) => setQuery(e.target.value)}
                     disabled={stationStatus !== "ready"}
                 />
-                {stationStatus === "ready" &&searchTerm && (
+                {stationStatus === "ready" && searchTerm && (
                     <div className="station-search__results">
                         {matches.length === 0 ? (
                             <p>No stations found.</p>
@@ -166,43 +259,44 @@ const matches = searchTerm ? stations.filter(station => station.properties.name.
 
                 {stationStatus === "ready" && (
                     selectedStation ? (
-                    <>
-                        <h2>{selectedStation.properties.name}</h2>
-                        {selectedStation.properties.routes.length > 0 ? (
-                            <div className="station-routes">
-                                {selectedStation.properties.routes.map((routeId) =>
-                                    selectedStation.properties.routes.length === 1 ? (
-                                        <span className="route-badge" key={routeId}>
-                                            {routeId}
-                                        </span>
-                                    ) : (
-                                        <button
-                                            key={routeId}
-                                            type="button"
-                                            className="route-button"
-                                            aria-pressed={selectedRouteId === routeId}
-                                            onClick={() => setSelectedRouteId(routeId)}
-                                        >
-                                            {routeId}
-                                        </button>
-                                    )
-                                )}
-                            </div>
-                        ) : (
-                            <p>No line information is available.</p>
-                        )}
-                        {selectedRouteId && (
-                            <div className="route-selection">
-                                <p role="status">
-                                    Highlighting {selectedRouteId} stations.
-                                </p>
-                                <p className="route-selection__note">
-                                    Based on daytime service. Temporary changes are not shown.
-                                </p>
-                            </div>
-                        )}
-                        <button type="button" onClick={() => {setSelectedRouteId(null); setSelectedStation(null)}}>Close</button>
-                    </>
+                        <>
+                            <h2>{selectedStation.properties.name}</h2>
+                            {selectedStation.properties.routes.length > 0 ? (
+                                <div className="station-routes">
+                                    {selectedStation.properties.routes.map((routeId) =>
+                                        selectedStation.properties.routes.length === 1 ? (
+                                            <span className="route-badge" key={routeId} style={getRouteStyle(routeId)}>
+                                                {routeId}
+                                            </span>
+                                        ) : (
+                                            <button
+                                                key={routeId}
+                                                type="button"
+                                                className="route-button"
+                                                style={getRouteStyle(routeId)}
+                                                aria-pressed={selectedRouteId === routeId}
+                                                onClick={() => setSelectedRouteId(routeId)}
+                                            >
+                                                {routeId}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                            ) : (
+                                <p>No line information is available.</p>
+                            )}
+                            {selectedRouteId && (
+                                <div className="route-selection">
+                                    <p role="status">
+                                        Highlighting {selectedRouteId} stations.
+                                    </p>
+                                    <p className="route-selection__note">
+                                        Based on daytime service. Temporary changes are not shown.
+                                    </p>
+                                </div>
+                            )}
+                            <button type="button" onClick={() => { setSelectedRouteId(null); setSelectedStation(null) }}>Close</button>
+                        </>
                     ) : (
                         <p>
                             {stations.length === 0 ? "No stations available." : "Select a station on the map or search for one."}
