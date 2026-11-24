@@ -194,11 +194,31 @@ body {
 }
 
 .station-dot::before {
-    transition: opacity 150ms ease;
+    transition:
+        width 150ms ease,
+        height 150ms ease,
+        opacity 150ms ease;
 }
 
 .station-dot.is-dimmed:not(.is-selected)::before {
-    opacity: 0.2;
+    width: 5px;
+    height: 5px;
+    border-width: 1px;
+    opacity: 0.25;
+}
+
+.station-dot.is-disabled {
+    pointer-events: none;
+    cursor: default;
+}
+
+.station-search__results button:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.station-search__results button:disabled:hover {
+    background: transparent;
 }
 
 .route-selection {

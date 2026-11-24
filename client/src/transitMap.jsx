@@ -7,6 +7,19 @@ import { getRouteStyle } from "./routeColors";
 
 maplibregl.setWorkerUrl(workerUrl);
 
+const scheduleTimeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+});
+
+function formatScheduleTime(value) {
+    return scheduleTimeFormatter.format(new Date(value));
+}
+
 export default function TransitMap() {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
@@ -17,12 +30,13 @@ export default function TransitMap() {
     const [stationStatus, setStationStatus] = useState("loading");
     const [selectedRouteId, setSelectedRouteId] = useState(null);
     const [routeShapesReady, setRouteShapesReady] = useState(false);
+    const [routeMeta, setRouteMeta] = useState(null);
+    const [routeError, setRouteError] = useState("");
+    const [stationRoutes, setStationRoutes] = useState(null);
 
     function selectStation(station) {
-        const routes = station.properties.routes;
-
         setSelectedStation(station);
-        setSelectedRouteId(routes[0] ?? null);
+        setSelectedRouteId(null);
         setQuery("");
     }
 
@@ -67,8 +81,11 @@ export default function TransitMap() {
                 for (const station of result.data.features) {
                     const element = document.createElement("div");
                     element.className = "station-dot";
+                    element.dataset.disabled = "true";
 
                     element.addEventListener("click", () => {
+                        if (element.dataset.disabled === "true") return;
+
                         selectStation(station);
                     });
 
@@ -103,74 +120,127 @@ export default function TransitMap() {
     useEffect(() => {
         const map = mapRef.current;
 
-        if(!map) return;
+        if (!map) return;
 
-        const controller = new AbortController();
+        let stopped = false;
+        let refreshTimer;
+        let requestController;
 
         async function loadRouteShapes() {
+            if(stopped) return;
+
+            requestController = new AbortController();
+
+            const timeoutTimer = setTimeout(() => {
+                requestController.abort();
+            }, 15000);
+
             try {
-                const response = await fetch("/api/transit/route-shapes", {signal: controller.signal});
+                const response = await fetch("/api/transit/route-shapes", {
+                    signal: requestController.signal,
+                    cache: "no-store",
+                });
 
                 if(!response.ok) {
-                    throw new Error(`Route shapes request failed: HTTP ${response.status}`);
+                    throw new Error(
+                        `Route shapes request failed: HTTP ${response.status}`
+                    );
                 }
 
                 const result = await response.json();
 
-                if(controller.signal.aborted) return;
+                if(stopped) return;
 
-                map.addSource("transit-routes", {
-                    type: "geojson",
-                    data: result.data,
-                });
+                if (
+                    !result.stationRoutes ||
+                    typeof result.stationRoutes !== "object" ||
+                    Array.isArray(result.stationRoutes) ||
+                    !Object.values(result.stationRoutes).every(
+                        (routes) =>
+                            Array.isArray(routes) &&
+                            routes.every((routeId) => typeof routeId === "string")
+                    )
+                ) {
+                    throw new Error("Invalid station routes response");
+                }
 
-                map.addLayer({
-                    id: "transit-routes-base",
-                    type: "line",
-                    source: "transit-routes",
-                    layout: {
-                        "line-cap": "round",
-                        "line-join": "round",
-                    },
-                    paint: {
-                        "line-color": ["get", "color"],
-                        "line-width": 3,
-                        "line-opacity": 0.25,
-                    },
-                });
-                map.addLayer({
-                    id: "transit-routes-selected",
-                    type: "line",
-                    source: "transit-routes",
-                    filter: ["==", ["get", "routeId"], ""],
-                    layout: {
-                        "line-cap": "round",
-                        "line-join": "round",
-                    },
-                    paint: {
-                        "line-color": ["get", "color"],
-                        "line-width": 5,
-                        "line-opacity": 1,
-                    },
-                });
+                const source = map.getSource("transit-routes");
 
+                if(source) {
+                    source.setData(result.data);
+                }else{
+                    map.addSource("transit-routes", {
+                        type: "geojson",
+                        data: result.data,
+                    });
+
+                    map.addLayer({
+                        id: "transit-routes-base",
+                        type: "line",
+                        source: "transit-routes",
+                        layout: {
+                            "line-cap": "round",
+                            "line-join": "round",
+                        },
+                        paint: {
+                            "line-color": ["get", "color"],
+                            "line-width": 3,
+                            "line-opacity": 0.25,
+                        },
+                    });
+
+                    map.addLayer({
+                        id: "transit-routes-selected",
+                        type: "line",
+                        source: "transit-routes",
+                        filter: ["==", ["get", "routeId"], ""],
+                        layout: {
+                            "line-cap": "round",
+                            "line-join": "round",
+                        },
+                        paint: {
+                            "line-color": ["get", "color"],
+                            "line-width": 5,
+                            "line-opacity": 1,
+                        },
+                    });
+                }
+
+                setStationRoutes(result.stationRoutes);
+                setRouteMeta(result.meta);
+                setRouteError("");
                 setRouteShapesReady(true);
-            }catch(error) {
-                if(error.name === "AbortError") return;
-                console.log("Failed to load route shapes:", error);
+            } catch (error) {
+                if(stopped) return;
+
+                console.error("Failed to update route shapes:", error);
+
+                setRouteError(
+                    map.getSource("transit-routes")
+                        ? "Could not refresh routes. Showing the last loaded schedule."
+                        : "Could not load scheduled routes. Retrying automatically."
+                );
+            } finally {
+                clearTimeout(timeoutTimer);
+
+                if(!stopped) {
+                    refreshTimer = setTimeout(loadRouteShapes, 60000);
+                }
             }
         }
-        
+
         if(map.isStyleLoaded()) {
             loadRouteShapes();
-        }else {
+        } else {
             map.once("load", loadRouteShapes);
         }
 
-        return() => {
-            controller.abort();
+        return () => {
+            stopped = true;
+            clearTimeout(refreshTimer);
+            requestController?.abort();
             map.off("load", loadRouteShapes);
-        }
+        };
     }, []);
 
     useEffect(() => {
@@ -187,7 +257,13 @@ export default function TransitMap() {
         map.setLayoutProperty(
             "transit-routes-base",
             "visibility",
-            selectedRouteId === null ? "visible" : "none"
+            "visible"
+        );
+
+        map.setPaintProperty(
+            "transit-routes-base",
+            "line-opacity",
+            selectedRouteId === null ? 0.5 : 0.2
         );
     }, [selectedRouteId, routeShapesReady]);
 
@@ -207,15 +283,81 @@ export default function TransitMap() {
 
     useEffect(() => {
         for (const station of stations) {
-            const element = markerElementsRef.current.get(station.properties.id);
+            const element =
+                markerElementsRef.current.get(station.properties.id);
 
             if (!element) continue;
 
-            const belongsToRoute = selectedRouteId === null || station.properties.routes.includes(selectedRouteId);
+            const stationId = station.properties.id;
+            const routes = stationRoutes?.[stationId] ?? [];
+            const isSelected =
+                stationId === selectedStation?.properties.id;
 
-            element.classList.toggle("is-dimmed", !belongsToRoute);
+            const belongsToRoute =
+                selectedRouteId !== null &&
+                routes.includes(selectedRouteId);
+
+            const blocked =
+                stationRoutes === null ||
+                (
+                    selectedStation !== null &&
+                    !isSelected &&
+                    !belongsToRoute
+                );
+
+            const dimmed =
+                !isSelected &&
+                (
+                    stationRoutes === null ||
+                    routes.length === 0 ||
+                    (selectedStation !== null && !belongsToRoute)
+                );
+
+            element.classList.toggle("is-dimmed", dimmed);
+            element.classList.toggle("is-disabled", blocked);
+            element.dataset.disabled = String(blocked);
         }
-    }, [stations, selectedRouteId]);
+    }, [stations, stationRoutes, selectedStation, selectedRouteId]);
+
+    useEffect(() => {
+        if (!selectedStation || stationRoutes === null) return;
+
+        const routes =
+            stationRoutes[selectedStation.properties.id] ?? [];
+
+        if (
+            selectedRouteId !== null &&
+            routes.includes(selectedRouteId)
+        ) {
+            return;
+        }
+
+        const nextRouteId = routes[0] ?? null;
+
+        if (nextRouteId !== selectedRouteId) {
+            setSelectedRouteId(nextRouteId);
+        }
+    }, [selectedStation, stationRoutes, selectedRouteId]);
+
+    const selectedStationRoutes = selectedStation
+        ? stationRoutes?.[selectedStation.properties.id] ?? []
+        : [];
+
+    function isStationBlocked(station) {
+        if (stationRoutes === null) return true;
+        if (!selectedStation) return false;
+
+        if (station.properties.id === selectedStation.properties.id) {
+            return false;
+        }
+
+        const routes = stationRoutes[station.properties.id] ?? [];
+
+        return (
+            selectedRouteId === null ||
+            !routes.includes(selectedRouteId)
+        );
+    }
 
     const searchTerm = query.trim().toLowerCase();
 
@@ -243,6 +385,7 @@ export default function TransitMap() {
                                 <button
                                     key={station.properties.id}
                                     type="button"
+                                    disabled={isStationBlocked(station)}
                                     onClick={() => selectStation(station)}
                                 >
                                     {station.properties.name}
@@ -253,6 +396,19 @@ export default function TransitMap() {
                 )}
             </div>
             <aside className="station-card" aria-label="Station details">
+                {routeMeta && (
+                    <p className="route-selection__note">
+                        Scheduled service: {formatScheduleTime(routeMeta.windowStart)}
+                        {" – "}
+                        {formatScheduleTime(routeMeta.windowEnd)}
+                    </p>
+                )}
+
+                {routeError && (
+                    <p role="status" className="route-selection__note">
+                        {routeError}
+                    </p>
+                )}
                 {stationStatus === "loading" && (<p role="status">Loading stations...</p>)}
 
                 {stationStatus === "error" && (<p role="alert">Could not load stations. Please refresh the page to try again.</p>)}
@@ -261,11 +417,17 @@ export default function TransitMap() {
                     selectedStation ? (
                         <>
                             <h2>{selectedStation.properties.name}</h2>
-                            {selectedStation.properties.routes.length > 0 ? (
+                            {stationRoutes === null ? (
+                                <p>Waiting for scheduled service data.</p>
+                            ) : selectedStationRoutes.length > 0 ? (
                                 <div className="station-routes">
-                                    {selectedStation.properties.routes.map((routeId) =>
-                                        selectedStation.properties.routes.length === 1 ? (
-                                            <span className="route-badge" key={routeId} style={getRouteStyle(routeId)}>
+                                    {selectedStationRoutes.map((routeId) =>
+                                        selectedStationRoutes.length === 1 ? (
+                                            <span
+                                                className="route-badge"
+                                                key={routeId}
+                                                style={getRouteStyle(routeId)}
+                                            >
                                                 {routeId}
                                             </span>
                                         ) : (
@@ -283,7 +445,7 @@ export default function TransitMap() {
                                     )}
                                 </div>
                             ) : (
-                                <p>No line information is available.</p>
+                                <p>No scheduled stops in the displayed time window.</p>
                             )}
                             {selectedRouteId && (
                                 <div className="route-selection">
@@ -291,7 +453,7 @@ export default function TransitMap() {
                                         Highlighting {selectedRouteId} stations.
                                     </p>
                                     <p className="route-selection__note">
-                                        Based on daytime service. Temporary changes are not shown.
+                                        Showing scheduled stops within the displayed time window. Live changes may differ.
                                     </p>
                                 </div>
                             )}
