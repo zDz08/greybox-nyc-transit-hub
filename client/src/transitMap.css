@@ -290,3 +290,18 @@ body {
 @media (min-width: 768px) {
     .station-card { top: 124px; }
 }
+
+.station-dot.is-compact::before {
+    width: 5px;
+    height: 5px;
+    border-width: 1px;
+    box-shadow: none;
+}
+
+.station-dot.is-compact.is-selected::before {
+    width: 7px;
+    height: 7px;
+    border: 1px solid #ffc247;
+    background: #ffc247;
+    box-shadow: none;
+}

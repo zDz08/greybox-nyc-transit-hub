@@ -5,6 +5,9 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./transitMap.css";
 import { getRouteStyle } from "./routeColors";
 
+const MAP_MIN_ZOOM = 13;
+const STATION_INTERACTION_ZOOM = 14;
+
 maplibregl.setWorkerUrl(workerUrl);
 
 const scheduleTimeFormatter = new Intl.DateTimeFormat("en-US", {
@@ -97,6 +100,7 @@ export default function TransitMap() {
     const [routeMeta, setRouteMeta] = useState(null);
     const [routeError, setRouteError] = useState("");
     const [stationRoutes, setStationRoutes] = useState(null);
+    const [isZoomedOut, setIsZoomedOut] = useState(false);
 
     function selectStation(station) {
         setSelectedStation(station);
@@ -109,7 +113,7 @@ export default function TransitMap() {
             container: containerRef.current,
             style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
             center: [-73.989, 40.746],
-            zoom: 12,
+            minZoom: MAP_MIN_ZOOM,
             attributionControl: false,
         });
         mapRef.current = map;
@@ -149,7 +153,12 @@ export default function TransitMap() {
                     applyMarkerStatusClasses(element, station);
 
                     element.addEventListener("click", () => {
-                        if (element.dataset.disabled === "true") return;
+                        if (
+                            map.getZoom() < STATION_INTERACTION_ZOOM ||
+                            element.dataset.disabled === "true"
+                        ) {
+                            return;
+                        }
 
                         selectStation(station);
                     });
@@ -179,6 +188,25 @@ export default function TransitMap() {
             map.remove();
             markerElementsRef.current.clear();
             mapRef.current = null;
+        };
+    }, []);
+
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if (!map) return;
+
+        function updateZoomState() {
+            setIsZoomedOut(
+                map.getZoom() < STATION_INTERACTION_ZOOM
+            );
+        }
+
+        updateZoomState();
+        map.on("zoom", updateZoomState);
+
+        return () => {
+            map.off("zoom", updateZoomState);
         };
     }, []);
 
@@ -355,6 +383,7 @@ export default function TransitMap() {
 
             const stationId = station.properties.id;
             const routes = stationRoutes?.[stationId] ?? [];
+
             const isSelected =
                 stationId === selectedStation?.properties.id;
 
@@ -362,27 +391,36 @@ export default function TransitMap() {
                 selectedRouteId !== null &&
                 routes.includes(selectedRouteId);
 
+            const blockedBySelection =
+                selectedStation !== null &&
+                !isSelected &&
+                !belongsToRoute;
+
             const blocked =
+                isZoomedOut ||
                 stationRoutes === null ||
-                (
-                    selectedStation !== null &&
-                    !isSelected &&
-                    !belongsToRoute
-                );
+                blockedBySelection;
 
             const dimmed =
                 !isSelected &&
                 (
                     stationRoutes === null ||
                     routes.length === 0 ||
-                    (selectedStation !== null && !belongsToRoute)
+                    blockedBySelection
                 );
 
+            element.classList.toggle("is-compact", isZoomedOut);
             element.classList.toggle("is-dimmed", dimmed);
             element.classList.toggle("is-disabled", blocked);
             element.dataset.disabled = String(blocked);
         }
-    }, [stations, stationRoutes, selectedStation, selectedRouteId]);
+    }, [
+        stations,
+        stationRoutes,
+        selectedStation,
+        selectedRouteId,
+        isZoomedOut,
+    ]);
 
     useEffect(() => {
         if (!selectedStation || stationRoutes === null) return;
