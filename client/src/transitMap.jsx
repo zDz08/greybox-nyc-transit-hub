@@ -6,8 +6,9 @@ import "./transitMap.css";
 import { getRouteStyle } from "./routeColors";
 import { startAutoRefresh } from "./autoRefresh.js";
 
-const MAP_MIN_ZOOM = 13;
-const STATION_INTERACTION_ZOOM = 14;
+const MAP_MIN_ZOOM = 11;
+const STATION_INTERACTION_ZOOM = 12;
+const MAP_MAX_ZOOM = 16;
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -102,6 +103,7 @@ export default function TransitMap() {
     const [routeError, setRouteError] = useState("");
     const [stationRoutes, setStationRoutes] = useState(null);
     const [isZoomedOut, setIsZoomedOut] = useState(false);
+    const [mapStyleReady, setMapStyleReady] = useState(false);
 
     function selectStation(station) {
         setSelectedStation(station);
@@ -115,6 +117,7 @@ export default function TransitMap() {
             style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
             center: [-73.989, 40.746],
             minZoom: MAP_MIN_ZOOM,
+            maxZoom: MAP_MAX_ZOOM,
             attributionControl: false,
         });
         mapRef.current = map;
@@ -128,6 +131,8 @@ export default function TransitMap() {
                     );
                 }
             }
+
+            setMapStyleReady(true);
         });
 
         map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -300,6 +305,9 @@ export default function TransitMap() {
                     });
                 }
 
+                if (map.getLayer("station-labels")) {
+                    map.moveLayer("station-labels");
+                }
                 setStationRoutes(result.stationRoutes);
                 setRouteMeta(result.meta);
                 setRouteError("");
@@ -449,6 +457,111 @@ export default function TransitMap() {
             setSelectedRouteId(nextRouteId);
         }
     }, [selectedStation, stationRoutes, selectedRouteId]);
+
+    useEffect(() => {
+        const map = mapRef.current;
+
+        if (!map || !mapStyleReady || stations.length === 0) return;
+
+        function updateStationLabels() {
+            const visibleStations = stations.filter((station) => {
+                if (!selectedStation) return true;
+
+                const stationId = station.properties.id;
+
+                if (stationId === selectedStation.properties.id) {
+                    return true;
+                }
+
+                if (selectedRouteId === null) return false;
+
+                const routes = stationRoutes?.[stationId] ?? [];
+
+                return routes.includes(selectedRouteId);
+            });
+
+            const data = {
+                type: "FeatureCollection",
+                features: visibleStations.map((station) => ({
+                    type: "Feature",
+                    geometry: station.geometry,
+                    properties: {
+                        id: station.properties.id,
+                        name: station.properties.name,
+                        selected:
+                            station.properties.id ===
+                            selectedStation?.properties.id,
+                    },
+                })),
+            };
+
+            const source = map.getSource("station-labels");
+
+            if (source) {
+                source.setData(data);
+            } else {
+                map.addSource("station-labels", {
+                    type: "geojson",
+                    data,
+                });
+            }
+
+            if (!map.getLayer("station-labels")) {
+                const fontLayer = map.getStyle().layers.find((layer) => {
+                    const fonts = layer.layout?.["text-font"];
+
+                    return (
+                        layer.type === "symbol" &&
+                        Array.isArray(fonts) &&
+                        fonts.length > 0 &&
+                        fonts.every((font) => typeof font === "string")
+                    );
+                });
+
+                const fonts =
+                    fontLayer?.layout?.["text-font"] ??
+                    ["Open Sans Regular"];
+
+                map.addLayer({
+                    id: "station-labels",
+                    type: "symbol",
+                    source: "station-labels",
+                    minzoom: STATION_INTERACTION_ZOOM,
+                    layout: {
+                        "text-field": ["get", "name"],
+                        "text-font": fonts,
+                        "text-size": 11,
+                        "text-anchor": "left",
+                        "text-offset": [0.9, 0],
+                        "text-max-width": 12,
+                        "text-padding": 5,
+                        "text-allow-overlap": false,
+                        "text-ignore-placement": false,
+                        "symbol-sort-key": [
+                            "case",
+                            ["get", "selected"],
+                            0,
+                            1,
+                        ],
+                    },
+                    paint: {
+                        "text-color": [
+                            "case",
+                            ["get", "selected"],
+                            "#ffc247",
+                            "#dce3eb",
+                        ],
+                        "text-halo-color": "#10151b",
+                        "text-halo-width": 1.5,
+                    },
+                });
+            }
+
+            map.moveLayer("station-labels");
+        }
+
+        updateStationLabels();
+    }, [stations, stationRoutes, selectedRouteId, selectedStation, mapStyleReady]);
 
     const selectedStationRoutes = selectedStation
         ? stationRoutes?.[selectedStation.properties.id] ?? []

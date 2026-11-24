@@ -35,7 +35,8 @@ body {
   font-family: system-ui, sans-serif;
   z-index: 2;
   box-sizing: border-box;
-  max-height: calc(100% - 100px);
+  max-height: min(340px, 45%);
+  overscroll-behavior-y: contain;
   overflow-y: auto;
   overflow-wrap: anywhere;
 }
@@ -131,8 +132,8 @@ body {
 }
 
 .station-dot {
-    width: 24px;
-    height: 24px;
+    width: 20px;
+    height: 20px;
     display: grid;
     place-items: center;
     cursor: pointer;
@@ -141,9 +142,9 @@ body {
 .station-dot::before {
     content: "";
     box-sizing: border-box;
-    width: 12px;
-    height: 12px;
-    border: 2px solid #e5e9ef;
+    width: 9px;
+    height: 9px;
+    border: 1.5px solid #e5e9ef;
     border-radius: 50%;
     background: #111820;
     pointer-events: none;
@@ -154,9 +155,9 @@ body {
 }
 
 .station-dot.is-selected::before {
-    width: 22px;
-    height: 22px;
-    border: 3px solid #ffc247;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ffc247;
     box-shadow: 0 0 0 6px rgb(255 194 71 / 20%);
 }
 
@@ -172,15 +173,25 @@ body {
     box-sizing: border-box;
     display: inline-grid;
     place-items: center;
+
+    width: 44px;
     min-width: 44px;
+    max-width: 44px;
     height: 44px;
-    padding: 0 12px;
+    min-height: 44px;
+    padding: 0;
+    flex-shrink: 0;
+
     border: 2px solid transparent;
     border-radius: 50%;
     background: var(--route-color, #7c858c);
     color: var(--route-text-color, #ffffff);
-    font: inherit;
+
+    font-family: inherit;
+    font-size: 16px;
     font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
 }
 
 .station-card .route-button {
@@ -288,7 +299,10 @@ body {
 .station-accessibility ul { padding-left: 20px; }
 .station-accessibility li { margin-bottom: 8px; }
 @media (min-width: 768px) {
-    .station-card { top: 124px; }
+    .station-card {
+        top: 124px;
+        max-height: min(420px, calc(100% - 140px));
+    }
 }
 
 .station-dot.is-compact::before {
