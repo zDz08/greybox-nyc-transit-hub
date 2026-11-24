@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./transitMap.css";
 import { getRouteStyle } from "./routeColors";
+import { startAutoRefresh } from "./autoRefresh.js";
 
 const MAP_MIN_ZOOM = 13;
 const STATION_INTERACTION_ZOOM = 14;
@@ -216,7 +217,7 @@ export default function TransitMap() {
         if (!map) return;
 
         let stopped = false;
-        let refreshTimer;
+        let stopAutoRefresh;
         let requestController;
 
         async function loadRouteShapes() {
@@ -315,24 +316,31 @@ export default function TransitMap() {
                 );
             } finally {
                 clearTimeout(timeoutTimer);
-
-                if(!stopped) {
-                    refreshTimer = setTimeout(loadRouteShapes, 60000);
-                }
             }
         }
 
-        if(map.isStyleLoaded()) {
-            loadRouteShapes();
+        function startTransitRefresh() {
+            if (stopped || stopAutoRefresh) return;
+
+            stopAutoRefresh = startAutoRefresh([
+                {
+                    name: "scheduled-service",
+                    run: loadRouteShapes,
+                },
+            ]);
+        }
+
+        if (map.isStyleLoaded()) {
+            startTransitRefresh();
         } else {
-            map.once("load", loadRouteShapes);
+            map.once("load", startTransitRefresh);
         }
 
         return () => {
             stopped = true;
-            clearTimeout(refreshTimer);
+            stopAutoRefresh?.();
             requestController?.abort();
-            map.off("load", loadRouteShapes);
+            map.off("load", startTransitRefresh);
         };
     }, []);
 
