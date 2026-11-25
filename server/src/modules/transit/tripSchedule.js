@@ -61,6 +61,7 @@ async function buildTripSchedules() {
 
         stopsByTrip.get(stop.trip_id).push({
             stationId,
+            stopId: stop.stop_id,
             arrivalSeconds,
             departureSeconds,
         });
@@ -114,6 +115,7 @@ async function buildTripSchedules() {
             serviceId: trip.service_id,
             shapeId: trip.shape_id,
             directionId: trip.direction_id,
+            headsign: trip.trip_headsign?.trim() || "",
             startSeconds,
             endSeconds,
             stops: stopsByTrip.get(trip.trip_id),

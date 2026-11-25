@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { getActiveTrips } from "./activeTrips.service.js";
-import { buildStationRoutes } from "./station.service.js";
+import { buildStationRoutes, buildStationDirections } from "./station.service.js";
 
 const routeShapesUrl = new URL(
     "../../../data/generated/route-shapes.geojson",
@@ -80,6 +80,7 @@ export async function getRouteShapes(now = new Date()) {
             features,
         },
         stationRoutes: buildStationRoutes(active),
+        stationDirections: buildStationDirections(active),
         meta: {
             ...active.meta,
             serviceType: "scheduled",

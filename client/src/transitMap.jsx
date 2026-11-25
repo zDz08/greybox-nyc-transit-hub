@@ -5,6 +5,7 @@ import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./transitMap.css";
 import { getRouteStyle } from "./routeColors";
 import { startAutoRefresh } from "./autoRefresh.js";
+import StationArrivals from "./stationArrivals.jsx";
 
 const MAP_MIN_ZOOM = 11;
 const STATION_INTERACTION_ZOOM = 12;
@@ -92,6 +93,7 @@ export default function TransitMap() {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const markerElementsRef = useRef(new Map());
+    const arrivalsRefreshRef = useRef(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
@@ -104,6 +106,7 @@ export default function TransitMap() {
     const [stationRoutes, setStationRoutes] = useState(null);
     const [isZoomedOut, setIsZoomedOut] = useState(false);
     const [mapStyleReady, setMapStyleReady] = useState(false);
+    const [stationDirections, setStationDirections] = useState({});
 
     function selectStation(station) {
         setSelectedStation(station);
@@ -309,6 +312,7 @@ export default function TransitMap() {
                     map.moveLayer("station-labels");
                 }
                 setStationRoutes(result.stationRoutes);
+                setStationDirections(result.stationDirections ?? {});
                 setRouteMeta(result.meta);
                 setRouteError("");
                 setRouteShapesReady(true);
@@ -334,6 +338,10 @@ export default function TransitMap() {
                 {
                     name: "scheduled-service",
                     run: loadRouteShapes,
+                },
+                {
+                    name: "realtime-arrivals",
+                    run: () => arrivalsRefreshRef.current?.(),
                 },
             ]);
         }
@@ -724,6 +732,20 @@ export default function TransitMap() {
                                         Showing scheduled stops within the displayed time window. Live changes may differ.
                                     </p>
                                 </div>
+                            )}
+                            {selectedRouteId && (
+                                <StationArrivals
+                                    key={`${selectedStation.properties.id}:${selectedRouteId}`}
+                                    stationId={selectedStation.properties.id}
+                                    routeId={selectedRouteId}
+                                    directionLabels={selectedStation.properties.directionLabels}
+                                    destinationLabels={
+                                        stationDirections[selectedStation.properties.id]?.[
+                                            selectedRouteId
+                                        ] ?? {}
+                                    }
+                                    refreshRef={arrivalsRefreshRef}
+                                />
                             )}
                                 {(() => {
                                     const acc = selectedStation.properties.accessibility;

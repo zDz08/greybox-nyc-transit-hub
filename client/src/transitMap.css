@@ -319,3 +319,87 @@ body {
     background: #ffc247;
     box-shadow: none;
 }
+
+.station-arrivals {
+    margin: 16px 0;
+}
+
+.station-arrivals__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.station-arrivals__live {
+    color: #ffc247;
+    font-size: 0.75rem;
+}
+
+.direction-list {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.station-card .direction-card {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 88px;
+    padding: 14px 12px;
+    border: 1px solid transparent;
+    border-radius: 18px;
+    background: #1d232c;
+    color: #f0f3f6;
+    text-align: left;
+}
+
+.station-card .direction-card[aria-pressed="true"] {
+    border-color: #ffc247;
+    background: #252b32;
+}
+
+.direction-card__arrow {
+    color: #ffc247;
+    font-size: 24px;
+}
+
+.direction-card__body {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.direction-card__body > strong {
+    font-size: 1rem;
+    overflow-wrap: anywhere;
+}
+
+.direction-card__detail {
+    color: #9ca8b7;
+    font-size: 0.75rem;
+    line-height: 1.4;
+}
+
+.direction-card__time {
+    display: flex;
+    align-items: baseline;
+    gap: 4px;
+    white-space: nowrap;
+}
+
+.direction-card__time strong {
+    color: #ffc247;
+    font-size: 30px;
+    line-height: 1;
+}
+
+.direction-card__time > span {
+    color: #9ca8b7;
+    font-size: 0.75rem;
+}
