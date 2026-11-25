@@ -171,7 +171,7 @@ export default function StationArrivals({
                         : [];
 
                     const first = arrivals[0];
-                    const following = arrivals.slice(1);
+                    const following = arrivals.slice(1, 3);
                     const minutes = first ? getMinutes(first, now) : null;
 
                     let detail = "\u00A0";

@@ -52,10 +52,10 @@ async function loadStationIds() {
         stationIds.set(stop.stop_id, parentId);
     }
 
-    return stationIds;
+    return { stationIds, stopsById };
 }
 
-export async function getStationIdByStopId() {
+async function getStopsData() {
     if (!stopsPromise) {
         stopsPromise = loadStationIds().catch((error) => {
             stopsPromise = null;
@@ -64,4 +64,14 @@ export async function getStationIdByStopId() {
     }
 
     return stopsPromise;
+}
+
+export async function getStationIdByStopId() {
+    const data = await getStopsData();
+    return data.stationIds;
+}
+
+export async function getStopDetailsById() {
+    const data = await getStopsData();
+    return data.stopsById;
 }

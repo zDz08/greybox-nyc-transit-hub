@@ -1,5 +1,6 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
-import { getStationIdByStopId } from "./gtfsStops.js";
+import { getStationIdByStopId, getStopDetailsById } from "./gtfsStops.js";
+import { orderStopUpdates, buildRemainingStops } from "./realtimeTrip.mapper.js";
 
 const FEED_BASE =
     "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F";
@@ -94,7 +95,10 @@ export async function getArrivals(stationId, routeId) {
         );
     }
 
-    const stationIds = await getStationIdByStopId();
+    const [stationIds, stopDetails] = await Promise.all([
+        getStationIdByStopId(),
+        getStopDetailsById(),
+    ]);
 
     if (stationIds.get(stationId) !== stationId) {
         throw serviceError(
@@ -152,7 +156,13 @@ export async function getArrivals(stationId, routeId) {
         const update = entity.tripUpdate;
         const trip = update?.trip;
 
-        if (!trip || trip.routeId !== routeId) continue;
+        if (
+            !trip ||
+            trip.routeId !== routeId ||
+            !trip.tripId
+        ) {
+            continue;
+        }
 
         if (
             trip.scheduleRelationship === "CANCELED" ||
@@ -161,7 +171,18 @@ export async function getArrivals(stationId, routeId) {
             continue;
         }
 
-        for (const stop of update.stopTimeUpdate ?? []) {
+        const orderedStops = orderStopUpdates(
+            update.stopTimeUpdate ?? []
+        );
+
+        const tripKey = JSON.stringify([
+            routeId,
+            trip.tripId,
+            trip.startDate ?? null,
+            trip.startTime ?? null,
+        ]);
+
+        for (const [index, stop] of orderedStops.entries()) {
             const direction = directions.get(stop.stopId);
 
             if (!direction) continue;
@@ -173,7 +194,6 @@ export async function getArrivals(stationId, routeId) {
                 continue;
             }
 
-            const arrivalTime = Number(stop.arrival?.time);
             const predictedTime = Number(stop.arrival?.time);
 
             if (
@@ -184,25 +204,46 @@ export async function getArrivals(stationId, routeId) {
                 continue;
             }
 
-            const eventType = "arrival";
-
-            const key = JSON.stringify([
-                trip.tripId || entity.id,
-                trip.startDate,
-                trip.startTime,
+            const callKey = JSON.stringify([
+                tripKey,
                 stop.stopId,
+                stop.stopSequence ?? null,
             ]);
 
-            if (seen.has(key)) continue;
-            seen.add(key);
+            if (seen.has(callKey)) continue;
+            seen.add(callKey);
+
+            const remainingStops = buildRemainingStops(
+                orderedStops,
+                index,
+                stopDetails,
+                stationIds
+            );
+
+            const lastStop = remainingStops.at(-1);
 
             direction.arrivals.push({
-                tripId: trip.tripId ?? entity.id,
-                predictedAt: new Date(predictedTime * 1000).toISOString(),
+                id: callKey,
+                tripKey,
+                tripId: trip.tripId,
+                startDate: trip.startDate ?? null,
+                routeId,
+                stopId: stop.stopId,
+                predictedAt: new Date(
+                    predictedTime * 1000
+                ).toISOString(),
                 minutesAway: Math.floor(
                     (predictedTime - nowSeconds) / 60
                 ),
-                eventType,
+                eventType: "arrival",
+                destination: lastStop
+                    ? {
+                        stopId: lastStop.stopId,
+                        stationId: lastStop.stationId,
+                        name: lastStop.name,
+                    }
+                    : null,
+                remainingStops,
             });
         }
     }
@@ -212,7 +253,7 @@ export async function getArrivals(stationId, routeId) {
             (a, b) => Date.parse(a.predictedAt) - Date.parse(b.predictedAt)
         );
 
-        direction.arrivals = direction.arrivals.slice(0, 3);
+        direction.arrivals = direction.arrivals.slice(0, 10);
     }
 
     return {
