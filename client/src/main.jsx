@@ -1,6 +1,8 @@
 import React, { useState } from "react";
 import { createRoot } from "react-dom/client";
 import Account from "./account.jsx";
+import { AccountProvider } from "./accountContext.jsx";
+import SavedCommutes from "./savedCommutes.jsx";
 import TransitMap from "./transitMap.jsx";
 import "./app.css";
 
@@ -39,6 +41,7 @@ function NavigationIcon({ name }) {
 
 function App() {
     const [activePage, setActivePage] = useState("map");
+    const [requestedCommute, setRequestedCommute] = useState(null);
 
     return (
         <div className="app-shell">
@@ -71,7 +74,10 @@ function App() {
                     className="app-map-page"
                     hidden={activePage !== "map"}
                 >
-                    <TransitMap />
+                    <TransitMap
+                        requestedCommute={requestedCommute}
+                        onSignIn={() => setActivePage("settings")}
+                    />
                 </div>
 
                 {activePage === "saved" && (
@@ -82,18 +88,14 @@ function App() {
                             <p>Your regular stations and directions, in one place.</p>
                         </header>
 
-                        <div className="app-panel app-empty">
-                            <NavigationIcon name="saved" />
-                            <h2>Your commute starts here</h2>
-                            <p>Saving stations and directions is coming next.</p>
-                            <button
-                                type="button"
-                                className="app-primary"
-                                onClick={() => setActivePage("map")}
-                            >
-                                Explore the map
-                            </button>
-                        </div>
+                        <SavedCommutes
+                            onExplore={() => setActivePage("map")}
+                            onSignIn={() => setActivePage("settings")}
+                            onOpen={(commute) => {
+                                setRequestedCommute({ ...commute });
+                                setActivePage("map");
+                            }}
+                        />
                     </section>
                 )}
 
@@ -143,4 +145,4 @@ function App() {
     );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<AccountProvider><App /></AccountProvider>);

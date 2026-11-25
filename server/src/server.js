@@ -1,4 +1,5 @@
 import app from "./app.js"
+import { closeDatabase } from "./database.js";
 
 const port = Number(process.env.PORT || 3000);
 
@@ -14,3 +15,15 @@ server.on("error", (error) => {
     console.error(`Server failed to start ${error.message}`);
     process.exit(1);
 });
+
+function shutdown() {
+    server.close(() => {
+        closeDatabase().catch((error) => {
+            console.error("Could not close the database connection:", error.name);
+            process.exitCode = 1;
+        });
+    });
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);

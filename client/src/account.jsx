@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
     createUserWithEmailAndPassword,
-    onAuthStateChanged,
     signInWithEmailAndPassword,
     signOut,
 } from "firebase/auth";
 import { auth } from "./firebaseAuth.js";
+import { useAccount } from "./accountContext.jsx";
 import "./account.css";
 
 function accountErrorMessage(error, isSignUp) {
@@ -91,53 +91,14 @@ function AccountForm() {
     );
 }
 
-async function verifySession(user, signal) {
-    const token = await user.getIdToken();
-    const response = await fetch("/api/auth/me", {
-        headers: { Authorization: `Bearer ${token}` },
-        signal,
-    });
-
-    if (!response.ok) throw new Error("Could not verify the session");
-    const { data } = await response.json();
-    return data;
-}
-
 export default function Account() {
+    const { session, reloadProfile } = useAccount();
     const [showForm, setShowForm] = useState(false);
-    const [session, setSession] = useState({ status: "loading" });
-    const [retry, setRetry] = useState(0);
     const [signOutError, setSignOutError] = useState("");
 
     useEffect(() => {
-        if (!auth) return;
-
-        let controller;
-        const unsubscribe = onAuthStateChanged(auth, async (user) => {
-            controller?.abort();
-            if (!user) {
-                setSession({ status: "guest" });
-                return;
-            }
-
-            setShowForm(false);
-            setSession({ status: "verifying" });
-            controller = new AbortController();
-            const { signal } = controller;
-
-            try {
-                const profile = await verifySession(user, signal);
-                if (!signal.aborted) setSession({ status: "signed-in", profile });
-            } catch {
-                if (!signal.aborted) setSession({ status: "error" });
-            }
-        });
-
-        return () => {
-            unsubscribe();
-            controller?.abort();
-        };
-    }, [retry]);
+        if (session.user) setShowForm(false);
+    }, [session.user]);
 
     async function handleSignOut() {
         setSignOutError("");
@@ -149,7 +110,7 @@ export default function Account() {
     }
 
     if (!auth) return <p className="account">Accounts are unavailable.</p>;
-    if (session.status === "loading") return <p className="account" role="status">Checking account…</p>;
+    if (session.status === "loading" && !session.user) return <p className="account" role="status">Checking account…</p>;
 
     if (session.status === "guest") {
         return (
@@ -165,11 +126,11 @@ export default function Account() {
     return (
         <div className="account">
             <div className="account-actions">
-                {session.status === "verifying" && <span role="status">Verifying session…</span>}
-                {session.status === "signed-in" && <span>Signed in as {session.profile.email}</span>}
+                <span>Signed in as {session.user.email}</span>
+                {session.status === "loading" && <span role="status">Loading saved commutes…</span>}
                 {session.status === "error" && <>
-                    <span role="alert">Could not verify your session.</span>
-                    <button type="button" onClick={() => setRetry(retry + 1)}>Retry</button>
+                    <span role="alert">Could not load your saved commutes.</span>
+                    <button type="button" onClick={reloadProfile}>Retry</button>
                 </>}
                 <button type="button" onClick={handleSignOut}>Sign out</button>
             </div>
