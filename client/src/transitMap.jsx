@@ -7,8 +7,8 @@ import { getRouteStyle } from "./routeColors";
 import { startAutoRefresh } from "./autoRefresh.js";
 import StationArrivals from "./stationArrivals.jsx";
 
-const MAP_MIN_ZOOM = 11;
-const STATION_INTERACTION_ZOOM = 12;
+const MAP_MIN_ZOOM = 12;
+const STATION_INTERACTION_ZOOM = 12.5;
 const MAP_MAX_ZOOM = 16;
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -94,6 +94,7 @@ export default function TransitMap() {
     const mapRef = useRef(null);
     const markerElementsRef = useRef(new Map());
     const arrivalsRefreshRef = useRef(null);
+    const stationCardRef = useRef(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
@@ -101,7 +102,6 @@ export default function TransitMap() {
     const [stationStatus, setStationStatus] = useState("loading");
     const [selectedRouteId, setSelectedRouteId] = useState(null);
     const [routeShapesReady, setRouteShapesReady] = useState(false);
-    const [routeMeta, setRouteMeta] = useState(null);
     const [routeError, setRouteError] = useState("");
     const [stationRoutes, setStationRoutes] = useState(null);
     const [isZoomedOut, setIsZoomedOut] = useState(false);
@@ -114,11 +114,17 @@ export default function TransitMap() {
         setQuery("");
     }
 
+    function closeStationCard() {
+        setSelectedRouteId(null);
+        setSelectedStation(null);
+    }
+
     useEffect(() => {
         const map = new maplibregl.Map({
             container: containerRef.current,
             style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
             center: [-73.989, 40.746],
+            zoom: 12.5,
             minZoom: MAP_MIN_ZOOM,
             maxZoom: MAP_MAX_ZOOM,
             attributionControl: false,
@@ -313,7 +319,6 @@ export default function TransitMap() {
                 }
                 setStationRoutes(result.stationRoutes);
                 setStationDirections(result.stationDirections ?? {});
-                setRouteMeta(result.meta);
                 setRouteError("");
                 setRouteShapesReady(true);
             } catch (error) {
@@ -571,6 +576,33 @@ export default function TransitMap() {
         updateStationLabels();
     }, [stations, stationRoutes, selectedRouteId, selectedStation, mapStyleReady]);
 
+    useEffect(() => {
+        if (!selectedStation) return;
+
+        function handleOutsideClick(event) {
+            const target = event.target;
+
+            if (!(target instanceof Element)) return;
+
+            if (stationCardRef.current?.contains(target)) return;
+
+            // Station clicks select a station instead of closing its card.
+            if (target.closest(".station-dot")) return;
+
+            // Keep search controls usable while selecting another station.
+            if (target.closest(".station-search")) return;
+
+            setSelectedRouteId(null);
+            setSelectedStation(null);
+        }
+
+        document.addEventListener("click", handleOutsideClick);
+
+        return () => {
+            document.removeEventListener("click", handleOutsideClick);
+        };
+    }, [selectedStation]);
+
     const selectedStationRoutes = selectedStation
         ? stationRoutes?.[selectedStation.properties.id] ?? []
         : [];
@@ -671,15 +703,7 @@ export default function TransitMap() {
                     )}
                 </div>
 
-            <aside className="station-card" aria-label="Station details">
-                {routeMeta && (
-                    <p className="route-selection__note">
-                        Scheduled service: {formatScheduleTime(routeMeta.windowStart)}
-                        {" – "}
-                        {formatScheduleTime(routeMeta.windowEnd)}
-                    </p>
-                )}
-
+            <aside ref={stationCardRef} className="station-card" aria-label="Station details">
                 {routeError && (
                     <p role="status" className="route-selection__note">
                         {routeError}
@@ -692,7 +716,32 @@ export default function TransitMap() {
                 {stationStatus === "ready" && (
                     selectedStation ? (
                         <>
-                            <h2>{selectedStation.properties.name}</h2>
+                            <div className="station-card__header">
+                                <h2>{selectedStation.properties.name}</h2>
+
+                                <button
+                                    type="button"
+                                    className="station-card__close"
+                                    aria-label="Close station details"
+                                    onClick={closeStationCard}
+                                >
+                                    <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                    >
+                                        <path
+                                            d="M6 6L18 18M18 6L6 18"
+                                            stroke="currentColor"
+                                            strokeWidth="2.5"
+                                            strokeLinecap="round"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
                             {stationRoutes === null ? (
                                 <p>Waiting for scheduled service data.</p>
                             ) : selectedStationRoutes.length > 0 ? (
@@ -722,16 +771,6 @@ export default function TransitMap() {
                                 </div>
                             ) : (
                                 <p>No scheduled stops in the displayed time window.</p>
-                            )}
-                            {selectedRouteId && (
-                                <div className="route-selection">
-                                    <p role="status">
-                                        Highlighting {selectedRouteId} stations.
-                                    </p>
-                                    <p className="route-selection__note">
-                                        Showing scheduled stops within the displayed time window. Live changes may differ.
-                                    </p>
-                                </div>
                             )}
                             {selectedRouteId && (
                                 <StationArrivals
@@ -823,7 +862,6 @@ export default function TransitMap() {
                                         </div>
                                     );
                                 })()}
-                            <button type="button" onClick={() => { setSelectedRouteId(null); setSelectedStation(null) }}>Close</button>
                         </>
                     ) : (
                         <p>

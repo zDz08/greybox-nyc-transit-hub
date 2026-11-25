@@ -144,7 +144,7 @@ export default function StationArrivals({
     return (
         <section className="station-arrivals" aria-label="Train directions">
             <div className="station-arrivals__header">
-                <strong>{routeId} train directions</strong>
+                <strong>Train directions</strong>
 
                 {canShowPredictions && (
                     <span className="station-arrivals__live">
@@ -248,7 +248,7 @@ export default function StationArrivals({
 
             {result && (
                 <p className="route-selection__note">
-                    Feed updated{" "}
+                    Updated{" "}
                     {new Date(result.meta.feedUpdatedAt).toLocaleTimeString(
                         "en-US",
                         {

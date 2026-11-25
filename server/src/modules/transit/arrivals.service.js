@@ -5,14 +5,13 @@ const FEED_BASE =
     "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F";
 
 const feedGroups = [
-    { suffix: "gtfs", routes: ["1", "2", "3", "4", "5", "6", "6X", "GS"] },
+    { suffix: "gtfs", routes: ["1", "2", "3", "4", "5", "6", "6X", "7", "7X", "GS"] },
     { suffix: "gtfs-ace", routes: ["A", "C", "E", "H"] },
-    { suffix: "gtfs-bdfm", routes: ["B", "D", "F", "FX", "M"] },
+    { suffix: "gtfs-bdfm", routes: ["B", "D", "F", "FX", "M", "FS"] },
     { suffix: "gtfs-g", routes: ["G"] },
     { suffix: "gtfs-jz", routes: ["J", "Z"] },
     { suffix: "gtfs-l", routes: ["L"] },
     { suffix: "gtfs-nqrw", routes: ["N", "Q", "R", "W"] },
-    { suffix: "gtfs-7", routes: ["7", "7X"] },
     { suffix: "gtfs-si", routes: ["SI"] },
 ];
 
