@@ -110,8 +110,10 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
     const [stationDirections, setStationDirections] = useState({});
     const [isStationCardCollapsed, setIsStationCardCollapsed] = useState(false);
     const [stationRouteShapes, setStationRouteShapes] = useState({});
+    const [initialDirectionStopId, setInitialDirectionStopId] = useState(null);
+    const [stationSelectionVersion, setStationSelectionVersion] = useState(0);
 
-    const isMapFocused = selectedStation !== null && !isStationCardCollapsed;
+    const isMapFocused = selectedStation !== null;
 
     const highlightedRouteId = isMapFocused ? selectedRouteId : null;
 
@@ -120,6 +122,16 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         setSelectedRouteId(null);
         setQuery("");
         setIsStationCardCollapsed(false);
+        setInitialDirectionStopId(null);
+        setStationSelectionVersion((previous) => previous + 1);
+    }
+
+    function closeStationCard() {
+        setSelectedStation(null);
+        setSelectedRouteId(null);
+        setInitialDirectionStopId(null);
+        setIsStationCardCollapsed(false);
+        setQuery("");
     }
 
     useEffect(() => {
@@ -134,6 +146,8 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         }
         setSelectedStation(station);
         setSelectedRouteId(requestedCommute.routeId);
+        setInitialDirectionStopId(requestedCommute.stopId);
+        setStationSelectionVersion((previous) => previous + 1);
         setQuery("");
         setIsStationCardCollapsed(false);
     }, [requestedCommute, stations, stationStatus]);
@@ -418,6 +432,14 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
             "line-opacity",
             highlightedRouteId === null ? 0.5 : 0.2
         );
+
+        map.setPaintProperty(
+            "transit-routes-base",
+            "line-color",
+            highlightedRouteId === null
+                ? ["get", "color"]
+                : "#9db2ce"
+        );
     }, [
         selectedStation,
         highlightedRouteId,
@@ -663,6 +685,89 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
             return nameMatches && (!adaOnly || isAdaStepFree(station));
         })
         : [];
+    
+    const stationAccessibility = selectedStation
+        ? (() => {
+            const acc = selectedStation.properties.accessibility;
+
+            if (!acc) {
+                return <p>Accessibility details unavailable.</p>;
+            }
+
+            const cleanNotes = formatAdaNotes(acc.adaNotes);
+            const adaContextNote = getAdaContextNote(acc.adaStatus);
+
+            const activeOutages = [
+                ...(acc.elevatorsOutOfService ?? []),
+                ...(acc.escalatorsOutOfService ?? []),
+            ];
+
+            const availableElevators = acc.availableElevators ?? [];
+            const upcomingOutages = acc.upcomingOutages ?? [];
+
+            return (
+                <div
+                    className="station-accessibility"
+                    aria-label="Elevator and escalator accessibility"
+                >
+                    <p>
+                        <strong>ADA:</strong>{" "}
+                        {ADA_LABELS[acc.adaStatus] ?? acc.adaStatus}
+                    </p>
+
+                    {adaContextNote && <p>{adaContextNote}</p>}
+                    {cleanNotes && <p>{cleanNotes}</p>}
+
+                    {availableElevators.length > 0 && (
+                        <div className="station-accessibility__available">
+                            <p>
+                                <strong>
+                                    Available elevators ({availableElevators.length}):
+                                </strong>
+                            </p>
+
+                            <ul>
+                                {availableElevators.map((el, idx) => (
+                                    <li key={`${el.equipment}-${idx}`}>
+                                        <strong>{el.equipment}</strong> —{" "}
+                                        {el.serving}
+                                        {el.isAda ? " (ADA)" : ""}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+
+                    {acc.hasOutage ? (
+                        <div>
+                            <p>
+                                <strong>Out of service:</strong>{" "}
+                                {acc.elevatorsOutOfServiceCount ?? 0} elevator(s),{" "}
+                                {acc.escalatorsOutOfServiceCount ?? 0} escalator(s)
+                            </p>
+
+                            {renderOutageList(activeOutages)}
+                        </div>
+                    ) : (
+                        <p>No active elevator or escalator outages.</p>
+                    )}
+
+                    {upcomingOutages.length > 0 && (
+                        <div className="station-accessibility__upcoming">
+                            <p>
+                                <strong>
+                                    Upcoming planned outage(s) (
+                                    {upcomingOutages.length}):
+                                </strong>
+                            </p>
+
+                            {renderOutageList(upcomingOutages)}
+                        </div>
+                    )}
+                </div>
+            );
+        })()
+        : null;
 
     return (
         <section className="transit-map">
@@ -812,6 +917,25 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                         />
                                     </svg>
                                 </button>
+                                <button
+                                    type="button"
+                                    className="station-card__dismiss"
+                                    aria-label="Close station details"
+                                    onClick={closeStationCard}
+                                >
+                                    <svg
+                                        width="20"
+                                        height="20"
+                                        viewBox="0 0 24 24"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth="2"
+                                        strokeLinecap="round"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M6 6l12 12M18 6L6 18" />
+                                    </svg>
+                                </button>
                             </div>
                                 <div
                                     id="station-card-content"
@@ -837,7 +961,12 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                                     className="route-button"
                                                     style={getRouteStyle(routeId)}
                                                     aria-pressed={selectedRouteId === routeId}
-                                                    onClick={() => setSelectedRouteId(routeId)}
+                                                    onClick={() => {
+                                                        if (routeId === selectedRouteId) return;
+
+                                                        setInitialDirectionStopId(null);
+                                                        setSelectedRouteId(routeId);
+                                                    }}
                                                 >
                                                     {routeId}
                                                 </button>
@@ -850,103 +979,26 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                 {selectedRouteId && stationRoutes !== null && !selectedStationRoutes.includes(selectedRouteId) && (
                                     <p>Saved line {selectedRouteId} has no scheduled stops in this time window.</p>
                                 )}
-                                {selectedRouteId && (
+                                {selectedRouteId ? (
                                     <StationArrivals
-                                        key={`${selectedStation.properties.id}:${selectedRouteId}`}
+                                        key={`${stationSelectionVersion}:${selectedStation.properties.id}:${selectedRouteId}`}
                                         stationId={selectedStation.properties.id}
                                         stationName={selectedStation.properties.name}
                                         routeId={selectedRouteId}
                                         onSignIn={onSignIn}
-                                        initialStopId={
-                                            selectedStation.properties.id === requestedCommute?.stationId &&
-                                            selectedRouteId === requestedCommute.routeId
-                                                ? requestedCommute.stopId : undefined
-                                        }
+                                        initialStopId={initialDirectionStopId}
                                         directionLabels={selectedStation.properties.directionLabels}
                                         destinationLabels={
                                             stationDirections[selectedStation.properties.id]?.[
                                                 selectedRouteId
                                             ] ?? {}
                                         }
+                                        stationDetails={stationAccessibility}
                                         refreshRef={arrivalsRefreshRef}
-                                    />
+                                        />
+                                ) : (
+                                    stationAccessibility
                                 )}
-                                    {(() => {
-                                        const acc = selectedStation.properties.accessibility;
-                                        if (!acc) {
-                                            return <p>Accessibility details unavailable.</p>;
-                                        }
-
-                                        const cleanNotes = formatAdaNotes(acc.adaNotes);
-                                        const adaContextNote = getAdaContextNote(acc.adaStatus);
-                                        const activeOutages = [
-                                            ...(acc.elevatorsOutOfService ?? []),
-                                            ...(acc.escalatorsOutOfService ?? []),
-                                        ];
-                                        const availableElevators = acc.availableElevators ?? [];
-                                        const upcomingOutages = acc.upcomingOutages ?? [];
-
-                                        return (
-                                            <div
-                                                className="station-accessibility"
-                                                aria-label="Elevator and escalator accessibility"
-                                            >
-                                                <p>
-                                                    <strong>ADA:</strong>{" "}
-                                                    {ADA_LABELS[acc.adaStatus] ?? acc.adaStatus}
-                                                </p>
-                                                {adaContextNote && <p>{adaContextNote}</p>}
-                                                {cleanNotes && <p>{cleanNotes}</p>}
-
-                                                {availableElevators.length > 0 && (
-                                                    <div className="station-accessibility__available">
-                                                        <p>
-                                                            <strong>
-                                                                Available elevators (
-                                                                {availableElevators.length}):
-                                                            </strong>
-                                                        </p>
-                                                        <ul>
-                                                            {availableElevators.map((el, idx) => (
-                                                                <li key={`${el.equipment}-${idx}`}>
-                                                                    <strong>{el.equipment}</strong> —{" "}
-                                                                    {el.serving}
-                                                                    {el.isAda ? " (ADA)" : ""}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                )}
-
-                                                {acc.hasOutage ? (
-                                                    <div>
-                                                        <p>
-                                                            <strong>Out of service:</strong>{" "}
-                                                            {acc.elevatorsOutOfServiceCount ?? 0}{" "}
-                                                            elevator(s),{" "}
-                                                            {acc.escalatorsOutOfServiceCount ?? 0}{" "}
-                                                            escalator(s)
-                                                        </p>
-                                                        {renderOutageList(activeOutages)}
-                                                    </div>
-                                                ) : (
-                                                    <p>No active elevator or escalator outages.</p>
-                                                )}
-
-                                                {upcomingOutages.length > 0 && (
-                                                    <div className="station-accessibility__upcoming">
-                                                        <p>
-                                                            <strong>
-                                                                Upcoming planned outage(s) (
-                                                                {upcomingOutages.length}):
-                                                            </strong>
-                                                        </p>
-                                                        {renderOutageList(upcomingOutages)}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        );
-                                })()}
                             </div>
                         </>
                     ) : (

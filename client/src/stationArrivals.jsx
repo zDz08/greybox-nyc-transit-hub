@@ -37,16 +37,19 @@ export default function StationArrivals({
     refreshRef,
     initialStopId,
     onSignIn,
+    stationDetails,
 }) {
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
     const [selectedStopId, setSelectedStopId] = useState(
-        initialStopId || `${stationId}N`
+        initialStopId ?? null
     );
+    const [selectedArrivalId, setSelectedArrivalId] = useState(null);
     const [now, setNow] = useState(Date.now());
 
     useEffect(() => {
-        if (initialStopId) setSelectedStopId(initialStopId);
+        setSelectedStopId(initialStopId ?? null);
+        setSelectedArrivalId(null);
     }, [initialStopId]);
 
     useEffect(() => {
@@ -95,13 +98,6 @@ export default function StationArrivals({
                 setError("");
                 setNow(Date.now());
 
-                setSelectedStopId((previous) =>
-                    payload.data.directions.some(
-                        (direction) => direction.stopId === previous
-                    )
-                        ? previous
-                        : payload.data.directions[0]?.stopId ?? null
-                );
             } catch (requestError) {
                 if (disposed) return;
 
@@ -149,10 +145,66 @@ export default function StationArrivals({
 
     const canShowPredictions = Boolean(result) && !error && !stale;
 
+    function upcomingArrivals(direction) {
+        if (!canShowPredictions) return [];
+
+        return (direction?.arrivals ?? []).filter(
+            (arrival) => Date.parse(arrival.predictedAt) >= now
+        );
+    }
+
+    const selectedDirection = directions.find(
+        (direction) => direction.stopId === selectedStopId
+    );
+
+    const upcoming = upcomingArrivals(selectedDirection);
+
+    const selectedArrival = upcoming.find(
+        (arrival) => arrival.id === selectedArrivalId
+    );
+
+    const directionLabel = selectedStopId
+        ? getDirectionLabel(
+            selectedStopId,
+            directionLabels,
+            destinationLabels
+        )
+        : "";
+
+    const pageTitle = selectedArrivalId
+        ? "Remaining stops"
+        : selectedStopId
+            ? "Upcoming trains"
+            : "Train directions";
+
+    function goBack() {
+        if (selectedArrivalId) {
+            setSelectedArrivalId(null);
+        } else {
+            setSelectedStopId(null);
+        }
+    }
+
     return (
-        <section className="station-arrivals" aria-label="Train directions">
+        <section className="station-arrivals" aria-label={pageTitle}>
             <div className="station-arrivals__header">
-                <strong>Train directions</strong>
+                <div className="arrival-page__heading">
+                    {selectedStopId && (
+                        <button
+                            type="button"
+                            className="arrival-back"
+                            onClick={goBack}
+                            aria-label={
+                                selectedArrivalId
+                                    ? "Back to upcoming trains"
+                                    : "Back to directions"
+                            }
+                        >
+                            ←
+                        </button>
+                    )}
+                    <strong>{pageTitle}</strong>
+                </div>
 
                 {canShowPredictions && (
                     <span className="station-arrivals__live">
@@ -161,126 +213,200 @@ export default function StationArrivals({
                 )}
             </div>
 
-            <div className="direction-list">
-                {directions.map((direction) => {
-                    const arrivals = canShowPredictions
-                        ? direction.arrivals.filter(
-                            (arrival) =>
-                                Date.parse(arrival.predictedAt) >= now
-                        )
-                        : [];
+            {!selectedStopId ? (
+                <div className="direction-list">
+                    {directions.map((direction) => {
+                        const arrivals = upcomingArrivals(direction);
+                        const first = arrivals[0];
+                        const following = arrivals.slice(1, 3);
 
-                    const first = arrivals[0];
-                    const following = arrivals.slice(1, 3);
-                    const minutes = first ? getMinutes(first, now) : null;
+                        const detail = first
+                            ? following.length > 0
+                                ? `Then ${following
+                                    .map((arrival) => getMinutes(arrival, now))
+                                    .join(", ")} min`
+                                : "Next arrival"
+                            : canShowPredictions
+                                ? "No predictions available"
+                                : "\u00A0";
 
-                    let detail = "\u00A0";
-
-                    if (first) {
-                        detail =
-                            first.eventType === "departure"
-                                ? "Departure estimate"
-                                : "Arrival estimate";
-
-                        if (following.length > 0) {
-                            detail += ` · Then ${following
-                                .map((arrival) => getMinutes(arrival, now))
-                                .join(", ")} min`;
-                        }
-                    } else if (canShowPredictions) {
-                        detail = "No predictions available";
-                    }
-
-                    return (
-                        <button
-                            key={direction.stopId}
-                            type="button"
-                            className="direction-card"
-                            aria-pressed={
-                                selectedStopId === direction.stopId
-                            }
-                            onClick={() =>
-                                setSelectedStopId(direction.stopId)
-                            }
-                        >
-                            <span
-                                className="direction-card__arrow"
-                                aria-hidden="true"
+                        return (
+                            <button
+                                key={direction.stopId}
+                                type="button"
+                                className="direction-card"
+                                onClick={() => {
+                                    setSelectedStopId(direction.stopId);
+                                    setSelectedArrivalId(null);
+                                }}
                             >
-                                →
-                            </span>
-
-                            <span className="direction-card__body">
-                                <strong>
-                                    {getDirectionLabel(
-                                        direction.stopId,
-                                        directionLabels,
-                                        destinationLabels
-                                    )}
-                                </strong>
-
-                                <span className="direction-card__detail">
-                                    {detail}
+                                <span
+                                    className="direction-card__arrow"
+                                    aria-hidden="true"
+                                >
+                                    →
                                 </span>
-                            </span>
 
-                            <span className="direction-card__time">
-                                <strong>
-                                    {minutes === null
-                                        ? "—"
-                                        : minutes}
-                                </strong>
+                                <span className="direction-card__body">
+                                    <strong>
+                                        {getDirectionLabel(
+                                            direction.stopId,
+                                            directionLabels,
+                                            destinationLabels
+                                        )}
+                                    </strong>
+                                    <span className="direction-card__detail">
+                                        {detail}
+                                    </span>
+                                </span>
 
-                                {minutes !== null && (
+                                <span className="direction-card__time">
+                                    <strong>
+                                        {first ? getMinutes(first, now) : "—"}
+                                    </strong>
+                                    {first && <span>min</span>}
+                                </span>
+                            </button>
+                        );
+                    })}
+                </div>
+            ) : !selectedArrivalId ? (
+                <>
+                    <p className="arrival-page__subtitle">
+                        {directionLabel}
+                    </p>
+
+                    <div className="trip-list">
+                        {upcoming.map((arrival) => (
+                            <button
+                                key={arrival.id}
+                                type="button"
+                                className="trip-row"
+                                onClick={() => setSelectedArrivalId(arrival.id)}
+                            >
+                                <span className="trip-row__body">
+                                    <strong>
+                                        {arrival.destination?.name ??
+                                            "Destination unavailable"}
+                                    </strong>
+                                    <span>
+                                        {formatArrivalTime(arrival.predictedAt)}
+                                        {" · "}
+                                        {arrival.remainingStops?.length ?? 0} stops
+                                    </span>
+                                </span>
+
+                                <span className="direction-card__time">
+                                    <strong>{getMinutes(arrival, now)}</strong>
                                     <span>min</span>
-                                )}
-                            </span>
-                        </button>
-                    );
-                })}
-            </div>
+                                </span>
+                            </button>
+                        ))}
+                    </div>
 
-            {selectedStopId && (
-                <SaveCommute
-                    onSignIn={onSignIn}
-                    commute={{
-                        id: `${stationId}:${routeId}:${selectedStopId}`,
-                        stationId,
-                        stationName,
-                        routeId,
-                        stopId: selectedStopId,
-                        directionLabel: getDirectionLabel(selectedStopId, directionLabels, destinationLabels),
-                    }}
-                />
+                    {canShowPredictions && upcoming.length === 0 && (
+                        <p role="status" className="route-selection__note">
+                            No upcoming predictions for this direction.
+                        </p>
+                    )}
+
+                    <SaveCommute
+                        onSignIn={onSignIn}
+                        commute={{
+                            id: `${stationId}:${routeId}:${selectedStopId}`,
+                            stationId,
+                            stationName,
+                            routeId,
+                            stopId: selectedStopId,
+                            directionLabel,
+                        }}
+                    />
+                </>
+            ) : selectedArrival ? (
+                <>
+                    <div className="trip-summary">
+                        <strong>
+                            {selectedArrival.destination?.name ??
+                                "Destination unavailable"}
+                        </strong>
+                        <span>
+                            {getMinutes(selectedArrival, now)} min
+                            {" · "}
+                            {formatArrivalTime(selectedArrival.predictedAt)}
+                            {" at "}
+                            {stationName}
+                        </span>
+                    </div>
+
+                    <ol className="trip-stops">
+                        {(selectedArrival.remainingStops ?? []).map(
+                            (stop, index) => (
+                                <li
+                                    key={`${stop.stopId ?? "unknown"}:${index}`}
+                                >
+                                    <span className="trip-stops__number">
+                                        {index + 1}
+                                    </span>
+
+                                    <span className="trip-stops__name">
+                                        {stop.name ??
+                                            `Unknown stop (${stop.stopId ?? "—"})`}
+                                        {index === 0 && (
+                                            <small>Selected station</small>
+                                        )}
+                                    </span>
+
+                                    <span className="trip-stops__time">
+                                        {formatArrivalTime(stop.arrivalAt)}
+                                    </span>
+                                </li>
+                            )
+                        )}
+                    </ol>
+                </>
+            ) : (
+                <p role="status" className="route-selection__note">
+                    {canShowPredictions
+                        ? "This train is no longer in the current predictions. Go back to choose another train."
+                        : "This train's predictions are temporarily unavailable."}
+                </p>
             )}
 
-            {error || stale ? (
+            {(error || stale) && (
                 <p role="status" className="route-selection__note">
                     {error
                         ? "Realtime predictions unavailable."
                         : "Predictions outdated."}
                 </p>
-            ) : result && directions.length === 0 ? (
+            )}
+
+            {!selectedStopId && result && directions.length === 0 && (
                 <p className="route-selection__note">
                     No direction information available.
                 </p>
-            ) : null}
+            )}
 
             {result && (
                 <p className="route-selection__note">
-                    Updated{" "}
-                    {new Date(result.meta.feedUpdatedAt).toLocaleTimeString(
-                        "en-US",
-                        {
-                            timeZone: "America/New_York",
-                            hour: "numeric",
-                            minute: "2-digit",
-                            second: "2-digit",
-                            timeZoneName: "short",
-                        }
-                    )}
+                    Updated {formatArrivalTime(result.meta.feedUpdatedAt)}
+                    {" · New York time"}
                 </p>
             )}
+            {selectedStopId === null && stationDetails}
         </section>
     );
+}
+
+function formatArrivalTime(value) {
+    if (!value) return "—";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "—";
+
+    return date.toLocaleTimeString("en-US", {
+        timeZone: "America/New_York",
+        hour: "numeric",
+        minute: "2-digit",
+    });
 }
