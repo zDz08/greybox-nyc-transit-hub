@@ -100,3 +100,54 @@ export function buildStationDirections(active) {
         ])
     );
 }
+
+export function buildStationRouteShapes(active) {
+    const windowStartMs = Date.parse(active.meta.windowStart);
+    const windowEndMs = Date.parse(active.meta.windowEnd);
+
+    const stations = new Map();
+
+    for (const trip of active.trips) {
+        const originMs =
+            Date.parse(trip.startsAt) - trip.startSeconds * 1000;
+
+        for (const stop of trip.stops) {
+            const arrivalMs =
+                originMs + stop.arrivalSeconds * 1000;
+
+            const departureMs =
+                originMs + stop.departureSeconds * 1000;
+
+            if (
+                departureMs < windowStartMs ||
+                arrivalMs >= windowEndMs
+            ) {
+                continue;
+            }
+
+            if (!stations.has(stop.stationId)) {
+                stations.set(stop.stationId, new Map());
+            }
+
+            const routes = stations.get(stop.stationId);
+
+            if (!routes.has(trip.routeId)) {
+                routes.set(trip.routeId, new Set());
+            }
+
+            routes.get(trip.routeId).add(trip.shapeId);
+        }
+    }
+
+    return Object.fromEntries(
+        [...stations].map(([stationId, routes]) => [
+            stationId,
+            Object.fromEntries(
+                [...routes].map(([routeId, shapeIds]) => [
+                    routeId,
+                    [...shapeIds].sort(),
+                ])
+            ),
+        ])
+    );
+}

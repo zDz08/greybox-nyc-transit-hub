@@ -109,6 +109,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
     const [mapStyleReady, setMapStyleReady] = useState(false);
     const [stationDirections, setStationDirections] = useState({});
     const [isStationCardCollapsed, setIsStationCardCollapsed] = useState(false);
+    const [stationRouteShapes, setStationRouteShapes] = useState({});
 
     const isMapFocused = selectedStation !== null && !isStationCardCollapsed;
 
@@ -337,6 +338,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                 }
                 setStationRoutes(result.stationRoutes);
                 setStationDirections(result.stationDirections ?? {});
+                setStationRouteShapes(result.stationRouteShapes ?? {});
                 setRouteError("");
                 setRouteShapesReady(true);
             } catch (error) {
@@ -388,10 +390,21 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
 
         if (!map || !routeShapesReady) return;
 
+        const stationId = selectedStation?.properties.id;
+
+        const shapeIds =
+            stationId && highlightedRouteId !== null
+                ? stationRouteShapes[stationId]?.[highlightedRouteId] ?? []
+                : [];
+
         map.setFilter("transit-routes-selected", [
-            "==",
-            ["get", "routeId"],
-            highlightedRouteId ?? "",
+            "all",
+            ["==", ["get", "routeId"], highlightedRouteId ?? ""],
+            [
+                "in",
+                ["get", "shapeId"],
+                ["literal", shapeIds],
+            ],
         ]);
 
         map.setLayoutProperty(
@@ -405,7 +418,12 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
             "line-opacity",
             highlightedRouteId === null ? 0.5 : 0.2
         );
-    }, [highlightedRouteId, routeShapesReady]);
+    }, [
+        selectedStation,
+        highlightedRouteId,
+        stationRouteShapes,
+        routeShapesReady,
+    ]);
 
     useEffect(() => {
         for (const [stationId, element] of markerElementsRef.current) {
