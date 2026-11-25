@@ -89,12 +89,13 @@ function renderOutageList(items) {
     );
 }
 
-export default function TransitMap() {
+export default function TransitMap({ requestedCommute, onSignIn }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const markerElementsRef = useRef(new Map());
     const arrivalsRefreshRef = useRef(null);
     const stationCardRef = useRef(null);
+    const openedCommuteRef = useRef(null);
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
@@ -115,6 +116,22 @@ export default function TransitMap() {
         setQuery("");
         setIsStationCardCollapsed(false);
     }
+
+    useEffect(() => {
+        if (!requestedCommute || stationStatus !== "ready" || openedCommuteRef.current === requestedCommute) return;
+        openedCommuteRef.current = requestedCommute;
+        const station = stations.find((item) => item.properties.id === requestedCommute.stationId);
+        if (!station) {
+            setSelectedStation(null);
+            setSelectedRouteId(null);
+            setRouteError("This saved station is unavailable in the current station data.");
+            return;
+        }
+        setSelectedStation(station);
+        setSelectedRouteId(requestedCommute.routeId);
+        setQuery("");
+        setIsStationCardCollapsed(false);
+    }, [requestedCommute, stations, stationStatus]);
 
     useEffect(() => {
         const map = new maplibregl.Map({
@@ -462,12 +479,14 @@ export default function TransitMap() {
             return;
         }
 
+        if (selectedStation.properties.id === requestedCommute?.stationId && selectedRouteId === requestedCommute.routeId) return;
+
         const nextRouteId = routes[0] ?? null;
 
         if (nextRouteId !== selectedRouteId) {
             setSelectedRouteId(nextRouteId);
         }
-    }, [selectedStation, stationRoutes, selectedRouteId]);
+    }, [selectedStation, stationRoutes, selectedRouteId, requestedCommute]);
 
     useEffect(() => {
         const map = mapRef.current;
@@ -804,11 +823,21 @@ export default function TransitMap() {
                                 ) : (
                                     <p>No scheduled stops in the displayed time window.</p>
                                 )}
+                                {selectedRouteId && stationRoutes !== null && !selectedStationRoutes.includes(selectedRouteId) && (
+                                    <p>Saved line {selectedRouteId} has no scheduled stops in this time window.</p>
+                                )}
                                 {selectedRouteId && (
                                     <StationArrivals
                                         key={`${selectedStation.properties.id}:${selectedRouteId}`}
                                         stationId={selectedStation.properties.id}
+                                        stationName={selectedStation.properties.name}
                                         routeId={selectedRouteId}
+                                        onSignIn={onSignIn}
+                                        initialStopId={
+                                            selectedStation.properties.id === requestedCommute?.stationId &&
+                                            selectedRouteId === requestedCommute.routeId
+                                                ? requestedCommute.stopId : undefined
+                                        }
                                         directionLabels={selectedStation.properties.directionLabels}
                                         destinationLabels={
                                             stationDirections[selectedStation.properties.id]?.[

@@ -281,6 +281,67 @@ input:focus-visible {
     max-width: 420px;
 }
 
+.saved-commutes {
+    padding: 0;
+    list-style: none;
+}
+
+.saved-commute {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+}
+
+.saved-commute__line {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    height: 44px;
+    border-radius: 50%;
+    font-weight: 700;
+}
+
+.saved-commute__details {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.saved-commute__details h2,
+.saved-commute__details p {
+    margin: 0 0 8px;
+}
+
+.saved-commute__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.saved-commute__actions .app-primary {
+    margin: 0;
+}
+
+.saved-commute__remove,
+.station-card .save-commute {
+    min-height: 44px;
+    padding: 10px 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: var(--app-surface);
+    color: var(--app-accent);
+    cursor: pointer;
+}
+
+.saved-commute__remove:disabled,
+.station-card .save-commute:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.save-commute-actions {
+    margin: 12px 0;
+}
+
 @media (min-width: 768px) {
     .app-shell .transit-map {
         --map-panel-width: 360px;

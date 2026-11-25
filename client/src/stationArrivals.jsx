@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import SaveCommute from "./saveCommute.jsx";
 
 function getDirectionLabel(stopId, labels, destinationLabels) {
     const destinations = destinationLabels?.[stopId];
@@ -29,17 +30,24 @@ function getMinutes(arrival, now) {
 
 export default function StationArrivals({
     stationId,
+    stationName,
     routeId,
     directionLabels,
     destinationLabels,
     refreshRef,
+    initialStopId,
+    onSignIn,
 }) {
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
     const [selectedStopId, setSelectedStopId] = useState(
-        `${stationId}N`
+        initialStopId || `${stationId}N`
     );
     const [now, setNow] = useState(Date.now());
+
+    useEffect(() => {
+        if (initialStopId) setSelectedStopId(initialStopId);
+    }, [initialStopId]);
 
     useEffect(() => {
         let disposed = false;
@@ -231,6 +239,20 @@ export default function StationArrivals({
                     );
                 })}
             </div>
+
+            {selectedStopId && (
+                <SaveCommute
+                    onSignIn={onSignIn}
+                    commute={{
+                        id: `${stationId}:${routeId}:${selectedStopId}`,
+                        stationId,
+                        stationName,
+                        routeId,
+                        stopId: selectedStopId,
+                        directionLabel: getDirectionLabel(selectedStopId, directionLabels, destinationLabels),
+                    }}
+                />
+            )}
 
             {error || stale ? (
                 <p role="status" className="route-selection__note">
