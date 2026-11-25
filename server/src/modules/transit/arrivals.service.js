@@ -174,25 +174,17 @@ export async function getArrivals(stationId, routeId) {
             }
 
             const arrivalTime = Number(stop.arrival?.time);
-            const departureTime = Number(stop.departure?.time);
+            const predictedTime = Number(stop.arrival?.time);
 
-            let predictedTime;
-            let eventType;
-
-            if (Number.isFinite(arrivalTime) && arrivalTime > 0) {
-                predictedTime = arrivalTime;
-                eventType = "arrival";
-            } else if (
-                Number.isFinite(departureTime) &&
-                departureTime > 0
+            if (
+                !Number.isFinite(predictedTime) ||
+                predictedTime <= 0 ||
+                predictedTime < nowSeconds
             ) {
-                predictedTime = departureTime;
-                eventType = "departure";
-            } else {
                 continue;
             }
 
-            if (predictedTime < nowSeconds) continue;
+            const eventType = "arrival";
 
             const key = JSON.stringify([
                 trip.tripId || entity.id,
@@ -207,7 +199,7 @@ export async function getArrivals(stationId, routeId) {
             direction.arrivals.push({
                 tripId: trip.tripId ?? entity.id,
                 predictedAt: new Date(predictedTime * 1000).toISOString(),
-                minutesAway: Math.ceil(
+                minutesAway: Math.floor(
                     (predictedTime - nowSeconds) / 60
                 ),
                 eventType,

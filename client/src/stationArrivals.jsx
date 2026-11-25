@@ -23,7 +23,7 @@ function getDirectionLabel(stopId, labels, destinationLabels) {
 function getMinutes(arrival, now) {
     return Math.max(
         0,
-        Math.ceil((Date.parse(arrival.predictedAt) - now) / 60000)
+        Math.floor((Date.parse(arrival.predictedAt) - now) / 60000)
     );
 }
 
@@ -220,12 +220,10 @@ export default function StationArrivals({
                                 <strong>
                                     {minutes === null
                                         ? "—"
-                                        : minutes === 0
-                                            ? "Due"
-                                            : minutes}
+                                        : minutes}
                                 </strong>
 
-                                {minutes !== null && minutes > 0 && (
+                                {minutes !== null && (
                                     <span>min</span>
                                 )}
                             </span>
