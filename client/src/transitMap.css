@@ -432,7 +432,7 @@ body {
     line-height: 1.25;
 }
 
-.station-card .station-card__close {
+.station-card .station-card__toggle {
     display: grid;
     place-items: center;
     flex: 0 0 36px;
@@ -452,16 +452,16 @@ body {
     cursor: pointer;
 }
 
-.station-card .station-card__close:hover {
+.station-card .station-card__toggle:hover {
     background: #252d38;
     color: #ffffff;
 }
 
-.station-card .station-card__close:focus-visible {
+.station-card .station-card__toggle:focus-visible {
     outline: 2px solid #ffc247;
     outline-offset: 2px;
 }
 
-.station-card__close svg {
+.station-card__toggle svg {
     display: block;
 }
