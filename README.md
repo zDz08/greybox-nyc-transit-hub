@@ -106,3 +106,13 @@ From that directory, run `npx firebase-tools emulators:start --only auth --proje
 Run MongoDB locally and set `MONGODB_URI=mongodb://127.0.0.1:27017` to test saved commutes with the Auth emulator. The MongoDB database persists independently of Firebase emulator accounts. To reuse those accounts across emulator restarts, export and import the Auth emulator data using the Firebase CLI.
 
 Scheduled route display and live arrivals also require GTFS source files under `server/data/gtfs/`, including `stops.txt`, `trips.txt`, `stop_times.txt`, `calendar.txt`, and `calendar_dates.txt`. This directory is ignored by Git. Use the GTFS release that matches the generated route shapes. When using a new release, also include `routes.txt` and `shapes.txt`, then run `node server/scripts/buildRouteShapes.js` from the repository root to regenerate the shapes.
+
+### Run account integration tests
+
+With MongoDB and the Auth emulator running, set `MONGODB_URI`, `FIREBASE_PROJECT_ID=demo-greybox`, and `FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099` in `server/.env`, then run:
+
+```bash
+npm run test:accounts --prefix server
+```
+
+The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.

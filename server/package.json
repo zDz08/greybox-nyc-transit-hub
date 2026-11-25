@@ -5,7 +5,8 @@
   "main": "src/server.js",
   "scripts": {
     "dev": "node --env-file=.env --watch src/server.js",
-    "start": "node src/server.js"
+    "start": "node src/server.js",
+    "test:accounts": "node --env-file-if-exists=.env --test test/accounts.test.js"
   },
   "keywords": [],
   "author": "",
