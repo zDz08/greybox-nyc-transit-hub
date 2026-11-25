@@ -110,6 +110,10 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
     const [stationDirections, setStationDirections] = useState({});
     const [isStationCardCollapsed, setIsStationCardCollapsed] = useState(false);
 
+    const isMapFocused = selectedStation !== null && !isStationCardCollapsed;
+
+    const highlightedRouteId = isMapFocused ? selectedRouteId : null;
+
     function selectStation(station) {
         setSelectedStation(station);
         setSelectedRouteId(null);
@@ -382,12 +386,12 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
     useEffect(() => {
         const map = mapRef.current;
 
-        if(!map || !routeShapesReady) return;
+        if (!map || !routeShapesReady) return;
 
         map.setFilter("transit-routes-selected", [
             "==",
             ["get", "routeId"],
-            selectedRouteId ?? "",
+            highlightedRouteId ?? "",
         ]);
 
         map.setLayoutProperty(
@@ -399,9 +403,9 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         map.setPaintProperty(
             "transit-routes-base",
             "line-opacity",
-            selectedRouteId === null ? 0.5 : 0.2
+            highlightedRouteId === null ? 0.5 : 0.2
         );
-    }, [selectedRouteId, routeShapesReady]);
+    }, [highlightedRouteId, routeShapesReady]);
 
     useEffect(() => {
         for (const [stationId, element] of markerElementsRef.current) {
@@ -431,12 +435,11 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                 stationId === selectedStation?.properties.id;
 
             const belongsToRoute =
-                selectedRouteId !== null &&
-                routes.includes(selectedRouteId);
+                highlightedRouteId !== null &&
+                routes.includes(highlightedRouteId);
 
             const blockedBySelection =
-                !isStationCardCollapsed &&
-                selectedStation !== null &&
+                isMapFocused &&
                 !isSelected &&
                 !belongsToRoute;
 
@@ -462,7 +465,8 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         stations,
         stationRoutes,
         selectedStation,
-        selectedRouteId,
+        highlightedRouteId,
+        isMapFocused,
         isZoomedOut,
     ]);
 
@@ -495,19 +499,19 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
 
         function updateStationLabels() {
             const visibleStations = stations.filter((station) => {
-                if (!selectedStation) return true;
+                if (!isMapFocused) return true;
 
                 const stationId = station.properties.id;
 
-                if (stationId === selectedStation.properties.id) {
+                if (stationId === selectedStation?.properties.id) {
                     return true;
                 }
 
-                if (selectedRouteId === null) return false;
+                if (highlightedRouteId === null) return false;
 
                 const routes = stationRoutes?.[stationId] ?? [];
 
-                return routes.includes(selectedRouteId);
+                return routes.includes(highlightedRouteId);
             });
 
             const data = {
@@ -591,7 +595,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         }
 
         updateStationLabels();
-    }, [stations, stationRoutes, selectedRouteId, selectedStation, mapStyleReady]);
+    }, [stations, stationRoutes, highlightedRouteId, selectedStation, isMapFocused, mapStyleReady]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -616,17 +620,19 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
 
     function isStationBlocked(station) {
         if (stationRoutes === null) return true;
-        if (!selectedStation || isStationCardCollapsed) return false;
+        if (!isMapFocused) return false;
 
-        if (station.properties.id === selectedStation.properties.id) {
+        if (
+            station.properties.id === selectedStation?.properties.id
+        ) {
             return false;
         }
 
         const routes = stationRoutes[station.properties.id] ?? [];
 
         return (
-            selectedRouteId === null ||
-            !routes.includes(selectedRouteId)
+            highlightedRouteId === null ||
+            !routes.includes(highlightedRouteId)
         );
     }
 
