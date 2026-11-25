@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
     createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
     signInWithEmailAndPassword,
     signOut,
 } from "firebase/auth";
@@ -8,7 +9,7 @@ import { auth } from "./firebaseAuth.js";
 import { useAccount } from "./accountContext.jsx";
 import "./account.css";
 
-function accountErrorMessage(error, isSignUp) {
+function accountErrorMessage(error, mode) {
     switch (error.code) {
         case "auth/invalid-email":
             return "Enter a valid email address.";
@@ -26,15 +27,25 @@ function accountErrorMessage(error, isSignUp) {
         case "auth/network-request-failed":
             return "Could not connect. Check your connection and try again.";
         default:
-            return isSignUp ? "Could not create your account." : "Could not sign in.";
+            return mode === "signUp" ? "Could not create your account." :
+                mode === "reset" ? "Could not send the reset email. Please try again." : "Could not sign in.";
     }
 }
 
 function AccountForm() {
-    const [isSignUp, setIsSignUp] = useState(false);
+    const [mode, setMode] = useState("signIn");
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState("");
-    const title = isSignUp ? "Create account" : "Sign in";
+    const [notice, setNotice] = useState("");
+    const isSignUp = mode === "signUp";
+    const isReset = mode === "reset";
+    const title = isSignUp ? "Create account" : isReset ? "Reset password" : "Sign in";
+
+    function changeMode(nextMode) {
+        setMode(nextMode);
+        setError("");
+        setNotice("");
+    }
 
     async function submit(event) {
         event.preventDefault();
@@ -43,14 +54,29 @@ function AccountForm() {
         const fields = new FormData(event.currentTarget);
         const email = fields.get("email").trim();
         const password = fields.get("password");
-        const authenticate = isSignUp ? createUserWithEmailAndPassword : signInWithEmailAndPassword;
 
         setError("");
+        setNotice("");
+        if (isSignUp && password !== fields.get("confirmPassword")) {
+            setError("Your passwords do not match. Please enter them again.");
+            return;
+        }
+
         setBusy(true);
         try {
-            await authenticate(auth, email, password);
+            if (isReset) {
+                await sendPasswordResetEmail(auth, email);
+                setNotice("If an account exists for this email, you'll receive a password reset link. Check your spam folder too.");
+            } else {
+                const authenticate = isSignUp ? createUserWithEmailAndPassword : signInWithEmailAndPassword;
+                await authenticate(auth, email, password);
+            }
         } catch (error) {
-            setError(accountErrorMessage(error, isSignUp));
+            if (isReset && error.code === "auth/user-not-found") {
+                setNotice("If an account exists for this email, you'll receive a password reset link. Check your spam folder too.");
+            } else {
+                setError(accountErrorMessage(error, mode));
+            }
         } finally {
             setBusy(false);
         }
@@ -59,13 +85,14 @@ function AccountForm() {
     return (
         <section className="account-panel" id="account-panel" aria-labelledby="account-title">
             <h2 id="account-title">{title}</h2>
+            {isReset && <p className="account-help">Enter your account email to request a password reset link.</p>}
             <form onSubmit={submit}>
                 <fieldset disabled={busy}>
                     <label>
                         Email
-                        <input name="email" type="email" autoComplete="email" required />
+                        <input name="email" type="email" autoComplete="email" autoCapitalize="none" spellCheck={false} required />
                     </label>
-                    <label key={title}>
+                    {!isReset && <label key={title}>
                         Password
                         <input
                             name="password"
@@ -74,17 +101,20 @@ function AccountForm() {
                             minLength={isSignUp ? 6 : undefined}
                             required
                         />
-                    </label>
+                    </label>}
+                    {isSignUp && <label>
+                        Confirm password
+                        <input name="confirmPassword" type="password" autoComplete="new-password" minLength={6} required />
+                    </label>}
                     {error && <p role="alert">{error}</p>}
+                    {notice && <p className="account-notice" role="status">{notice}</p>}
                     <button className="account-primary" type="submit">
-                        {busy ? "Please wait…" : title}
+                        {busy ? "Please wait…" : isReset ? "Send reset link" : title}
                     </button>
-                    <button type="button" onClick={() => {
-                        setIsSignUp(!isSignUp);
-                        setError("");
-                    }}>
-                        {isSignUp ? "Already have an account? Sign in" : "New here? Create an account"}
+                    <button type="button" onClick={() => changeMode(mode === "signIn" ? "signUp" : "signIn")}>
+                        {isSignUp ? "Already have an account? Sign in" : isReset ? "Back to sign in" : "New here? Create an account"}
                     </button>
+                    {mode === "signIn" && <button type="button" onClick={() => changeMode("reset")}>Forgot password?</button>}
                 </fieldset>
             </form>
         </section>
@@ -95,17 +125,22 @@ export default function Account() {
     const { session, reloadProfile } = useAccount();
     const [showForm, setShowForm] = useState(false);
     const [signOutError, setSignOutError] = useState("");
+    const [signingOut, setSigningOut] = useState(false);
 
     useEffect(() => {
         if (session.user) setShowForm(false);
     }, [session.user]);
 
     async function handleSignOut() {
+        if (signingOut) return;
         setSignOutError("");
+        setSigningOut(true);
         try {
             await signOut(auth);
         } catch {
             setSignOutError("Could not sign out. Please try again.");
+        } finally {
+            setSigningOut(false);
         }
     }
 
@@ -132,7 +167,7 @@ export default function Account() {
                     <span role="alert">Could not load your saved commutes.</span>
                     <button type="button" onClick={reloadProfile}>Retry</button>
                 </>}
-                <button type="button" onClick={handleSignOut}>Sign out</button>
+                <button type="button" disabled={signingOut} onClick={handleSignOut}>{signingOut ? "Signing out…" : "Sign out"}</button>
             </div>
             {signOutError && <p role="alert">{signOutError}</p>}
         </div>

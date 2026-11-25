@@ -103,6 +103,12 @@ The `users` collection uses the verified Firebase UID as `_id`. Each profile sto
 
 On the map, select a station, a line, and a direction, then choose **Save this direction**. The **Saved** page lists personal commutes and supports opening them on the map or removing them. Account state is shared across pages. If MongoDB is temporarily unavailable, the account and Saved pages offer a retry.
 
+### Password recovery
+
+The sign-up form requires matching passwords. Returning users can choose **Settings → Account → Sign in / Sign up → Forgot password?**, enter their account email, and request a reset link. Firebase sends the email and hosts the password reset page. The app shows the same confirmation whether or not the email is registered. After resetting, users sign in with their new password; their Firebase UID and MongoDB saved commutes remain the same.
+
+With the Auth emulator, reset links are printed in the emulator terminal instead of being sent as real emails. Keep emulator settings unset to use real Firebase email delivery.
+
 Authenticated account endpoints use `Authorization: Bearer <Firebase ID token>`:
 
 | Method | Endpoint | Behavior |
@@ -134,4 +140,4 @@ With MongoDB and the Auth emulator running, set `MONGODB_URI`, `FIREBASE_PROJECT
 npm run test:accounts --prefix server
 ```
 
-The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
+The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, password recovery without losing saved commutes, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
