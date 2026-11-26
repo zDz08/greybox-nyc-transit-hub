@@ -16,6 +16,8 @@ function emptyAccessibility() {
     return {
         adaStatus: "unknown",
         adaNotes: null,
+        outageFeedAvailable: true,
+        equipmentFeedAvailable: true,
         hasOutage: false,
         elevatorsOutOfServiceCount: 0,
         escalatorsOutOfServiceCount: 0,
@@ -63,10 +65,21 @@ function normalizeMockFeature(feature) {
                 upcomingOutageCount:
                     acc.upcomingOutageCount ?? upcomingOutages.length,
                 hasOutage:
-                    acc.hasOutage ?? (elevatorsOut.length > 0 || escalatorsOut.length > 0),
+                    acc.hasOutage ??
+                    (elevatorsOut.length > 0 || escalatorsOut.length > 0),
             },
         },
     };
+}
+
+async function fetchStationsOnce(url) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(25000) });
+
+    if (!response.ok) {
+        throw new Error(`Station request failed: HTTP ${response.status}`);
+    }
+
+    return response.json();
 }
 
 async function fetchRawStations() {
@@ -76,13 +89,15 @@ async function fetchRawStations() {
     url.searchParams.set("$limit", "1000");
     url.searchParams.set("$order", "gtfs_stop_id");
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });
-
-    if (!response.ok) {
-        throw new Error(`Station request failed: HTTP ${response.status}`);
+    try {
+        return await fetchStationsOnce(url);
+    } catch (error) {
+        if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+            console.warn("Stations fetch timed out, retrying once...");
+            return await fetchStationsOnce(url);
+        }
+        throw error;
     }
-
-    return response.json();
 }
 
 async function getRawStations() {
@@ -129,13 +144,21 @@ export async function getStations() {
         throw error;
     }
 
+    let outageFeedAvailable = true;
+    let equipmentFeedAvailable = true;
+
     const [rawStations, outages, equipments] = await Promise.all([
         getRawStations(),
         getOutagesFeed().catch((err) => {
-            console.warn("Failed to load ENE outage feed, continuing without outages:", err.message);
+            outageFeedAvailable = false;
+            console.warn(
+                "Failed to load ENE outage feed, reporting status unavailable:",
+                err.message
+            );
             return [];
         }),
         getEquipmentsFeed().catch((err) => {
+            equipmentFeedAvailable = false;
             console.warn(
                 "Failed to load ENE equipments feed, continuing without equipment inventory:",
                 err.message
@@ -148,13 +171,23 @@ export async function getStations() {
         data: {
             type: "FeatureCollection",
             features: rawStations.map((station) => {
-                const accessibility = getStationAccessibility(station, outages, equipments);
+                const accessibility = getStationAccessibility(
+                    station,
+                    outages,
+                    equipments,
+                    {
+                        outageFeedAvailable,
+                        equipmentFeedAvailable,
+                    }
+                );
                 return toStationFeature(station, accessibility);
             }),
         },
         meta: {
             source: "ny-open-data",
             accessibilitySource: "mta-ene+equipments",
+            outageFeedAvailable,
+            equipmentFeedAvailable,
         },
     };
 }

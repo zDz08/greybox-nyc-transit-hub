@@ -1,5 +1,7 @@
 const ENE_FEED_URL =
     "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene.json";
+//const ENE_FEED_URL =
+  //  "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene_broken.json](https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene_broken.json"
 const ENE_EQUIPMENTS_URL =
     "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2Fnyct_ene_equipments.json";
 
@@ -14,8 +16,41 @@ let cachedEquipments = null;
 let equipmentsCacheExpiresAt = 0;
 let pendingEquipmentsRequest = null;
 
-function normalizeName(name = "") {
-    return String(name).toLowerCase().replace(/\s+/g, " ").trim();
+const STREET_ABBR_MAP = new Map([
+    ["street", "st"],
+    ["str", "st"],
+    ["avenue", "av"],
+    ["ave", "av"],
+    ["square", "sq"],
+    ["place", "pl"],
+    ["park", "pk"],
+    ["parks", "pk"],
+    ["fort", "ft"],
+    ["mount", "mt"],
+    ["boulevard", "blvd"],
+    ["road", "rd"],
+]);
+
+function normalizeStationName(name = "") {
+    const cleaned = String(name)
+        .toLowerCase()
+        .replace(/\(.*?\)/g, " ")
+        .replace(
+            /\b(north|south|east|west|uptown|downtown|brooklyn|manhattan|queens|bronx)\b/g,
+            " "
+        )
+        .replace(/['’]/g, "")
+        .replace(/[\/\-–—,&.]+/g, " ")
+        .replace(/\b(\d+)(st|nd|rd|th)\b/g, "$1")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    if (!cleaned) return "";
+
+    return cleaned
+        .split(" ")
+        .map((token) => STREET_ABBR_MAP.get(token) ?? token)
+        .join(" ");
 }
 
 function parseRoutes(routeString = "") {
@@ -32,14 +67,31 @@ function mapAdaCode(adaCode) {
     return "unknown";
 }
 
-function matchesStationAndRoutes(recordStationName, recordRouteString, stationNorm, stationRoutes) {
-    if (normalizeName(recordStationName) !== stationNorm) {
+function matchesStationAndRoutes(
+    recordStationName,
+    recordRouteString,
+    stationNorm,
+    stationRoutes
+) {
+    if (!stationNorm) return false;
+    const recordNorm = normalizeStationName(recordStationName);
+    if (!recordNorm) return false;
+
+    const exactMatch = recordNorm === stationNorm;
+    const tokenSubsetMatch =
+        !exactMatch &&
+        recordNorm.length >= 4 &&
+        stationNorm.length >= 4 &&
+        (` ${stationNorm} `.includes(` ${recordNorm} `) ||
+            ` ${recordNorm} `.includes(` ${stationNorm} `));
+
+    if (!exactMatch && !tokenSubsetMatch) {
         return false;
     }
 
     const recordRoutes = parseRoutes(recordRouteString);
     if (recordRoutes.length === 0 || stationRoutes.size === 0) {
-        return true;
+        return exactMatch;
     }
 
     return recordRoutes.some((route) => stationRoutes.has(route));
@@ -87,7 +139,10 @@ export async function getEquipmentsFeed() {
         return pendingEquipmentsRequest;
     }
 
-    pendingEquipmentsRequest = fetchJsonArray(ENE_EQUIPMENTS_URL, "ENE equipments feed");
+    pendingEquipmentsRequest = fetchJsonArray(
+        ENE_EQUIPMENTS_URL,
+        "ENE equipments feed"
+    );
 
     try {
         cachedEquipments = await pendingEquipmentsRequest;
@@ -98,8 +153,16 @@ export async function getEquipmentsFeed() {
     }
 }
 
-export function getStationAccessibility(station, outages = [], equipments = []) {
-    const stationNorm = normalizeName(station.stop_name);
+export function getStationAccessibility(
+    station,
+    outages = [],
+    equipments = [],
+    options = {}
+) {
+    const outageFeedAvailable = options.outageFeedAvailable ?? true;
+    const equipmentFeedAvailable = options.equipmentFeedAvailable ?? true;
+
+    const stationNorm = normalizeStationName(station.stop_name);
     const stationRoutes = new Set(parseRoutes(station.daytime_routes ?? ""));
 
     const matchedEquipments = equipments.filter((eq) =>
@@ -118,16 +181,24 @@ export function getStationAccessibility(station, outages = [], equipments = []) 
         }
     }
 
-    const matchedOutages = outages.filter((item) =>
-        matchesStationAndRoutes(item.station, item.trainno, stationNorm, stationRoutes)
-    );
+    const matchedOutages = outageFeedAvailable
+        ? outages.filter((item) =>
+              matchesStationAndRoutes(
+                  item.station,
+                  item.trainno,
+                  stationNorm,
+                  stationRoutes
+              )
+          )
+        : [];
 
     const formatOutage = (item) => {
         const eqMeta = equipmentByCode.get(item.equipment);
         return {
             equipment: item.equipment,
             type: item.equipmenttype,
-            serving: item.serving || eqMeta?.serving || eqMeta?.shortdescription || "",
+            serving:
+                item.serving || eqMeta?.serving || eqMeta?.shortdescription || "",
             ada: item.ADA === "Y" || eqMeta?.ADA === "Y",
             reason: item.reason,
             outageDate: item.outagedate,
@@ -139,8 +210,12 @@ export function getStationAccessibility(station, outages = [], equipments = []) 
         };
     };
 
-    const activeItems = matchedOutages.filter((item) => item.isupcomingoutage !== "Y");
-    const upcomingItems = matchedOutages.filter((item) => item.isupcomingoutage === "Y");
+    const activeItems = matchedOutages.filter(
+        (item) => item.isupcomingoutage !== "Y"
+    );
+    const upcomingItems = matchedOutages.filter(
+        (item) => item.isupcomingoutage === "Y"
+    );
 
     const activeEquipmentCodes = new Set(
         activeItems.map((item) => item.equipment).filter(Boolean)
@@ -160,24 +235,33 @@ export function getStationAccessibility(station, outages = [], equipments = []) 
     const normalizedEquipments = matchedEquipments.map((eq) => {
         const code = eq.equipmentno;
         const isActive = eq.isactive === "Y";
-        const isOutOfService = isActive && activeEquipmentCodes.has(code);
-        const hasUpcomingOutage = isActive && !isOutOfService && upcomingEquipmentCodes.has(code);
+        const isOutOfService =
+            outageFeedAvailable && isActive && activeEquipmentCodes.has(code);
+        const hasUpcomingOutage =
+            outageFeedAvailable &&
+            isActive &&
+            !isOutOfService &&
+            upcomingEquipmentCodes.has(code);
 
-        let status = "available";
+        let status = "unknown";
         if (!isActive) {
             status = "inactive";
+        } else if (!outageFeedAvailable) {
+            status = "unknown";
         } else if (isOutOfService) {
             status = "out-of-service";
         } else if (hasUpcomingOutage) {
             status = "upcoming-outage";
+        } else {
+            status = "available";
         }
 
         return {
             equipment: code,
-            type: eq.equipmenttype, // "EL" | "ES"
+            type: eq.equipmenttype,
             isAda: eq.ADA === "Y",
             isActive,
-            status, // "available" | "out-of-service" | "upcoming-outage" | "inactive"
+            status,
             serving: eq.serving || eq.shortdescription || "",
             shortDescription: eq.shortdescription || "",
             linesServed: eq.linesservedbyelevator || eq.trainno || "",
@@ -186,22 +270,35 @@ export function getStationAccessibility(station, outages = [], equipments = []) 
         };
     });
 
-    const availableElevators = normalizedEquipments.filter(
-        (eq) => eq.type === "EL" && eq.status === "available"
-    );
-    const availableEscalators = normalizedEquipments.filter(
-        (eq) => eq.type === "ES" && eq.status === "available"
-    );
+    const availableElevators = outageFeedAvailable
+        ? normalizedEquipments.filter(
+              (eq) => eq.type === "EL" && eq.status === "available"
+          )
+        : [];
+    const availableEscalators = outageFeedAvailable
+        ? normalizedEquipments.filter(
+              (eq) => eq.type === "ES" && eq.status === "available"
+          )
+        : [];
+
+    const hasOutage =
+        outageFeedAvailable && (elevatorsOut.length > 0 || escalatorsOut.length > 0);
 
     return {
         adaStatus: mapAdaCode(station.ada),
         adaNotes: station.ada_notes ?? null,
-        hasOutage: elevatorsOut.length > 0 || escalatorsOut.length > 0,
-        elevatorsOutOfServiceCount: elevatorsOut.length,
-        escalatorsOutOfServiceCount: escalatorsOut.length,
-        availableElevatorCount: availableElevators.length,
-        availableEscalatorCount: availableEscalators.length,
-        upcomingOutageCount: upcomingOutages.length,
+        outageFeedAvailable,
+        equipmentFeedAvailable,
+        hasOutage,
+        elevatorsOutOfServiceCount: outageFeedAvailable ? elevatorsOut.length : null,
+        escalatorsOutOfServiceCount: outageFeedAvailable ? escalatorsOut.length : null,
+        availableElevatorCount: outageFeedAvailable
+            ? availableElevators.length
+            : null,
+        availableEscalatorCount: outageFeedAvailable
+            ? availableEscalators.length
+            : null,
+        upcomingOutageCount: outageFeedAvailable ? upcomingOutages.length : null,
         elevatorsOutOfService: elevatorsOut,
         escalatorsOutOfService: escalatorsOut,
         availableElevators,
