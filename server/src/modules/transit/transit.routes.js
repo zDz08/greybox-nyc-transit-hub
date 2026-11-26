@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getStations } from "./transit.service.js";
 import { getRouteShapes } from "./routeShapes.service.js"
 import { getArrivals } from "./arrivals.service.js";
+import { getServiceAlerts } from "./serviceAlerts.service.js";
 
 const router = Router();
 
@@ -62,6 +63,24 @@ router.get("/stations/:stationId/arrivals", async (req, res, next) => {
         }
 
         next(error);
+    }
+});
+
+router.get("/service-alerts", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+
+    try {
+        const result = await getServiceAlerts();
+        res.json(result);
+    } catch (error) {
+        console.error("Could not load service alerts:", error);
+
+        res.status(502).json({
+            error: {
+                code: "SERVICE_ALERTS_UNAVAILABLE",
+                message: "Service alerts are temporarily unavailable.",
+            },
+        });
     }
 });
 
