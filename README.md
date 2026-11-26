@@ -86,18 +86,34 @@ The Firebase project is now created, with the **Email/Password** provider enable
 | Plan | Spark (free) |
 | Optional services | Gemini and Google Analytics disabled during project creation |
 
-Use this existing project rather than creating a separate one for each teammate. Ask the project owner for console access or the web app configuration. This setup does not create a Firebase database: profiles and saved commutes use MongoDB. A shared cloud MongoDB deployment is still pending; the cloud authentication integration was verified against a local MongoDB instance.
+Use this existing project rather than creating a separate one for each teammate. Ask the project owner for console access or the web app configuration. Firebase manages account identity and passwords; profiles and saved commutes use the shared MongoDB Atlas cluster below.
+
+### Shared MongoDB Atlas cluster
+
+| Setting | Value |
+| --- | --- |
+| Cluster | `greybox-transit` |
+| Console | [Atlas project](https://cloud.mongodb.com/v2/6b076587ca6882a40a3af5d9#/overview) |
+| Tier / region | Free, AWS `us-east-1` |
+| Application database | `greybox_transit` |
+| Application database role | `readWrite` on `greybox_transit` |
+
+The cloud cluster is created and Firebase cloud authentication plus Atlas profile/commute persistence have been verified together. Request the connection string privately from the project owner; it contains a database password and must stay server-side in the ignored `server/.env` file. The application user has no Atlas admin role.
+
+Atlas permits connections from IP addresses in the project's access list. The configuring developer's current public IP has been added. Teammates and any future hosted backend need their own network access configured by the project owner before connecting. A network change can also require an updated IP entry.
 
 ### Connect your local checkout
 
 1. Open the existing Firebase project's **Project settings → Your apps → Greybox Transit Web** to obtain its web app configuration.
 2. Copy `client/.env.example` to `client/.env` and fill in the web app configuration from Firebase Project settings. Use the same project ID for `FIREBASE_PROJECT_ID` in `server/.env`.
-3. Set `MONGODB_URI` in `server/.env` to the team's MongoDB connection string. For a local MongoDB server, use `mongodb://127.0.0.1:27017`. `MONGODB_DB_NAME` defaults to `greybox_transit`.
+3. Set `MONGODB_URI` in `server/.env` to the team's Atlas connection string and `MONGODB_DB_NAME=greybox_transit`. For an independently running local MongoDB server, use `mongodb://127.0.0.1:27017` instead.
 4. Restart both dev servers, open **Settings → Account**, then select **Sign in / Sign up**. Firebase manages passwords and sessions. The app sends the ID token to `GET /api/users/me`, which verifies it and creates or loads the MongoDB user profile.
 
 When using the cloud project, leave both `VITE_FIREBASE_AUTH_EMULATOR_URL` and `FIREBASE_AUTH_EMULATOR_HOST` unset. Basic Firebase ID token verification works with `FIREBASE_PROJECT_ID`; no service account key is needed for the current account endpoints. Keep local `.env` files and any future service account credentials out of Git.
 
-Cloud smoke verification passed for registration, signed token verification by the existing backend, wrong-password rejection, and saving, reloading after sign-in, and removing commutes in local MongoDB. The temporary cloud test account and its database profile were removed after verification. Live MTA data and a shared cloud MongoDB deployment were not part of this check.
+Cloud smoke verification passed against real Firebase Authentication and MongoDB Atlas for registration, signed token verification by the existing backend, invalid token and wrong-password rejection, duplicate saves, reloading saved commutes after sign-in, and removal. The temporary cloud test account and its database profile were removed after verification. This account verification does not validate live MTA data, real mailbox delivery, or a hosted frontend/backend deployment.
+
+Browser verification also passed with real Firebase and Atlas: sign-up, saving a direction, restoring it after refresh and re-login, opening the same direction on the map, removal, and sign-out. Transit cards used temporary sample responses to isolate the account workflow from local GTFS files; those responses are not part of the application code or configuration.
 
 The `users` collection uses the verified Firebase UID as `_id`. Each profile stores its email and `savedCommutes`. Each commute identifies a station, line, and platform direction, with display labels. Concurrent or repeated saves keep one entry per combination. Existing profile fields are preserved.
 
