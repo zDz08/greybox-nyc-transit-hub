@@ -175,6 +175,38 @@ test("Firebase accounts own persistent MongoDB profiles and saved commutes", asy
         assert.equal((await request("GET", "/users/me", owner)).body.data.savedCommutes.length, 3);
     });
 
+    await t.test("password recovery preserves the Firebase identity and saved commutes", async () => {
+        const resetRequest = await authRequest("sendOobCode", {
+            requestType: "PASSWORD_RESET", email: owner.email,
+        });
+        assert.equal(resetRequest.status, 200);
+        const oobResponse = await fetch(
+            `http://${emulatorHost}/emulator/v1/projects/${projectId}/oobCodes`,
+            { signal: AbortSignal.timeout(10000) }
+        );
+        assert.equal(oobResponse.status, 200);
+        const { oobCodes } = await oobResponse.json();
+        const resetCode = oobCodes.find((code) => code.email === owner.email && code.requestType === "PASSWORD_RESET");
+        assert.ok(resetCode, "The Auth emulator should have a password reset email for this test account.");
+        const newPassword = `Reset-only-${testId}`;
+        assert.equal((await authRequest("resetPassword", {
+            oobCode: resetCode.oobCode, newPassword,
+        })).status, 200);
+        assert.equal((await authRequest("signInWithPassword", {
+            email: owner.email, password: `Test-only-${testId}`, returnSecureToken: true,
+        })).status, 400);
+        const signedIn = await authRequest("signInWithPassword", {
+            email: owner.email, password: newPassword, returnSecureToken: true,
+        });
+        assert.equal(signedIn.status, 200);
+        assert.equal(signedIn.data.localId, owner.localId);
+        owner.idToken = signedIn.data.idToken;
+        const profile = await request("GET", "/users/me", owner);
+        assert.equal(profile.status, 200);
+        assert.equal(profile.body.data.savedCommutes.length, 3);
+        assert.equal(await users.countDocuments({ _id: owner.localId }), 1);
+    });
+
     await t.test("database connection failures can be retried", async () => {
         await closeDatabase();
         const unusedPort = createServer().listen(0, "127.0.0.1");
