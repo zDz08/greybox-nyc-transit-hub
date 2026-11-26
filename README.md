@@ -75,14 +75,39 @@ Keep both terminals running. Open the **Local** URL printed by Vite
 
 ## 6. Enable sign-up and sign-in
 
-1. In the team's Firebase project, register a web app and enable the **Email/Password** sign-in provider under **Authentication**.
+### Shared Firebase cloud project
+
+The Firebase project is now created, with the **Email/Password** provider enabled and the **Greybox Transit Web** app registered:
+
+| Setting | Value |
+| --- | --- |
+| Project ID | `greybox-nyc-transit-hub` |
+| Console | [Firebase Authentication](https://console.firebase.google.com/project/greybox-nyc-transit-hub/authentication/providers) |
+| Plan | Spark (free) |
+| Optional services | Gemini and Google Analytics disabled during project creation |
+
+Use this existing project rather than creating a separate one for each teammate. Ask the project owner for console access or the web app configuration. This setup does not create a Firebase database: profiles and saved commutes use MongoDB. A shared cloud MongoDB deployment is still pending; the cloud authentication integration was verified against a local MongoDB instance.
+
+### Connect your local checkout
+
+1. Open the existing Firebase project's **Project settings → Your apps → Greybox Transit Web** to obtain its web app configuration.
 2. Copy `client/.env.example` to `client/.env` and fill in the web app configuration from Firebase Project settings. Use the same project ID for `FIREBASE_PROJECT_ID` in `server/.env`.
 3. Set `MONGODB_URI` in `server/.env` to the team's MongoDB connection string. For a local MongoDB server, use `mongodb://127.0.0.1:27017`. `MONGODB_DB_NAME` defaults to `greybox_transit`.
 4. Restart both dev servers, open **Settings → Account**, then select **Sign in / Sign up**. Firebase manages passwords and sessions. The app sends the ID token to `GET /api/users/me`, which verifies it and creates or loads the MongoDB user profile.
 
+When using the cloud project, leave both `VITE_FIREBASE_AUTH_EMULATOR_URL` and `FIREBASE_AUTH_EMULATOR_HOST` unset. Basic Firebase ID token verification works with `FIREBASE_PROJECT_ID`; no service account key is needed for the current account endpoints. Keep local `.env` files and any future service account credentials out of Git.
+
+Cloud smoke verification passed for registration, signed token verification by the existing backend, wrong-password rejection, and saving, reloading after sign-in, and removing commutes in local MongoDB. The temporary cloud test account and its database profile were removed after verification. Live MTA data and a shared cloud MongoDB deployment were not part of this check.
+
 The `users` collection uses the verified Firebase UID as `_id`. Each profile stores its email and `savedCommutes`. Each commute identifies a station, line, and platform direction, with display labels. Concurrent or repeated saves keep one entry per combination. Existing profile fields are preserved.
 
 On the map, select a station, a line, and a direction, then choose **Save this direction**. The **Saved** page lists personal commutes and supports opening them on the map or removing them. Account state is shared across pages. If MongoDB is temporarily unavailable, the account and Saved pages offer a retry.
+
+### Password recovery
+
+The sign-up form requires matching passwords. Returning users can choose **Settings → Account → Sign in / Sign up → Forgot password?**, enter their account email, and request a reset link. Firebase sends the email and hosts the password reset page. The app shows the same confirmation whether or not the email is registered. After resetting, users sign in with their new password; their Firebase UID and MongoDB saved commutes remain the same.
+
+With the Auth emulator, reset links are printed in the emulator terminal instead of being sent as real emails. Keep emulator settings unset to use real Firebase email delivery.
 
 Authenticated account endpoints use `Authorization: Bearer <Firebase ID token>`:
 
@@ -115,4 +140,4 @@ With MongoDB and the Auth emulator running, set `MONGODB_URI`, `FIREBASE_PROJECT
 npm run test:accounts --prefix server
 ```
 
-The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
+The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, password recovery without losing saved commutes, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
