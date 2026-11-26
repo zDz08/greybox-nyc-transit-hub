@@ -38,6 +38,8 @@ export default function StationArrivals({
     initialStopId,
     onSignIn,
     stationDetails,
+    selectionKey,
+    onTripSelectionChange,
 }) {
     const [result, setResult] = useState(null);
     const [error, setError] = useState("");
@@ -162,6 +164,19 @@ export default function StationArrivals({
     const selectedArrival = upcoming.find(
         (arrival) => arrival.id === selectedArrivalId
     );
+
+    useEffect(() => {
+        onTripSelectionChange({
+            selectionKey,
+            selectedId: selectedArrivalId,
+            arrival: selectedArrival ?? null,
+        });
+    }, [
+        selectionKey,
+        selectedArrivalId,
+        selectedArrival,
+        onTripSelectionChange,
+    ]);
 
     const directionLabel = selectedStopId
         ? getDirectionLabel(
@@ -337,6 +352,20 @@ export default function StationArrivals({
                             {stationName}
                         </span>
                     </div>
+
+                    {selectedArrival.path?.status !== "matched" &&
+                        selectedArrival.path?.status !== "single-stop" && (
+                            <p role="status" className="route-selection__note">
+                                Map path unavailable for this train. Its reported stops
+                                are listed below.
+                            </p>
+                        )}
+
+                    {selectedArrival.path?.status === "single-stop" && (
+                        <p className="route-selection__note">
+                            Only this station remains in the reported stop list.
+                        </p>
+                    )}
 
                     <ol className="trip-stops">
                         {(selectedArrival.remainingStops ?? []).map(

@@ -1,6 +1,7 @@
 import GtfsRealtimeBindings from "gtfs-realtime-bindings";
 import { getStationIdByStopId, getStopDetailsById } from "./gtfsStops.js";
 import { orderStopUpdates, buildRemainingStops } from "./realtimeTrip.mapper.js";
+import { getTripPath } from "./tripPath.service.js";
 
 const FEED_BASE =
     "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/nyct%2F";
@@ -254,6 +255,22 @@ export async function getArrivals(stationId, routeId) {
         );
 
         direction.arrivals = direction.arrivals.slice(0, 10);
+        for (const arrival of direction.arrivals) {
+            try {
+                arrival.path = await getTripPath(
+                    routeId,
+                    arrival.remainingStops,
+                    arrival.tripId
+                );
+            } catch (error) {
+                console.error("Could not build trip path:", error);
+
+                arrival.path = {
+                    status: "unavailable",
+                    reason: "path-data-unavailable",
+                };
+            }
+        }
     }
 
     return {

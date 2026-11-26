@@ -1,9 +1,9 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./transitMap.css";
-import { getRouteStyle } from "./routeColors";
+import { getRouteStyle, routeColors } from "./routeColors.js";
 import { startAutoRefresh } from "./autoRefresh.js";
 import StationArrivals from "./stationArrivals.jsx";
 
@@ -112,10 +112,36 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
     const [stationRouteShapes, setStationRouteShapes] = useState({});
     const [initialDirectionStopId, setInitialDirectionStopId] = useState(null);
     const [stationSelectionVersion, setStationSelectionVersion] = useState(0);
+    const [tripSelection, setTripSelection] = useState(null);
 
     const isMapFocused = selectedStation !== null;
 
     const highlightedRouteId = isMapFocused ? selectedRouteId : null;
+
+    const arrivalSelectionKey = JSON.stringify([
+        stationSelectionVersion,
+        selectedStation?.properties.id ?? null,
+        selectedRouteId,
+    ]);
+
+    const currentTripSelection =
+        tripSelection?.selectionKey === arrivalSelectionKey
+            ? tripSelection
+            : null;
+
+    const hasTripSelection =
+        Boolean(currentTripSelection?.selectedId);
+
+    const activeTrip = currentTripSelection?.arrival ?? null;
+
+    const tripStationIds = useMemo(
+        () => new Set(
+            (activeTrip?.remainingStops ?? [])
+                .map((stop) => stop.stationId)
+                .filter(Boolean)
+        ),
+        [activeTrip]
+    );
 
     function selectStation(station) {
         setSelectedStation(station);
@@ -124,6 +150,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         setIsStationCardCollapsed(false);
         setInitialDirectionStopId(null);
         setStationSelectionVersion((previous) => previous + 1);
+        setTripSelection(null);
     }
 
     function closeStationCard() {
@@ -132,6 +159,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         setInitialDirectionStopId(null);
         setIsStationCardCollapsed(false);
         setQuery("");
+        setTripSelection(null);
     }
 
     useEffect(() => {
@@ -411,15 +439,74 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                 ? stationRouteShapes[stationId]?.[highlightedRouteId] ?? []
                 : [];
 
-        map.setFilter("transit-routes-selected", [
-            "all",
-            ["==", ["get", "routeId"], highlightedRouteId ?? ""],
-            [
-                "in",
-                ["get", "shapeId"],
-                ["literal", shapeIds],
-            ],
-        ]);
+        const emptyCollection = {
+            type: "FeatureCollection",
+            features: [],
+        };
+
+        if (!map.getSource("selected-trip")) {
+            map.addSource("selected-trip", {
+                type: "geojson",
+                data: emptyCollection,
+            });
+        }
+
+        if (!map.getLayer("selected-trip-line")) {
+            map.addLayer({
+                id: "selected-trip-line",
+                type: "line",
+                source: "selected-trip",
+                layout: {
+                    "line-cap": "round",
+                    "line-join": "round",
+                },
+                paint: {
+                    "line-color": ["get", "color"],
+                    "line-width": 5,
+                    "line-opacity": 1,
+                },
+            });
+        }
+
+        const geometry =
+            activeTrip?.path?.status === "matched"
+                ? activeTrip.path.geometry
+                : null;
+
+        const tripData =
+            hasTripSelection && geometry?.type === "LineString"
+                ? {
+                    type: "FeatureCollection",
+                    features: [
+                        {
+                            type: "Feature",
+                            properties: {
+                                color:
+                                    routeColors[highlightedRouteId] ??
+                                    "#ffc247",
+                            },
+                            geometry,
+                        },
+                    ],
+                }
+                : emptyCollection;
+
+        map.getSource("selected-trip").setData(tripData);
+
+        map.setFilter(
+            "transit-routes-selected",
+            hasTripSelection
+                ? ["==", ["get", "routeId"], ""]
+                : [
+                    "all",
+                    ["==", ["get", "routeId"], highlightedRouteId ?? ""],
+                    [
+                        "in",
+                        ["get", "shapeId"],
+                        ["literal", shapeIds],
+                    ],
+                ]
+        );
 
         map.setLayoutProperty(
             "transit-routes-base",
@@ -440,11 +527,17 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                 ? ["get", "color"]
                 : "#9db2ce"
         );
+
+        if (map.getLayer("station-labels")) {
+            map.moveLayer("station-labels");
+        }
     }, [
         selectedStation,
         highlightedRouteId,
         stationRouteShapes,
         routeShapesReady,
+        hasTripSelection,
+        activeTrip,
     ]);
 
     useEffect(() => {
@@ -463,37 +556,42 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
 
     useEffect(() => {
         for (const station of stations) {
-            const element =
-                markerElementsRef.current.get(station.properties.id);
+            const stationId = station.properties.id;
+            const element = markerElementsRef.current.get(stationId);
 
             if (!element) continue;
 
-            const stationId = station.properties.id;
             const routes = stationRoutes?.[stationId] ?? [];
 
             const isSelected =
                 stationId === selectedStation?.properties.id;
 
-            const belongsToRoute =
-                highlightedRouteId !== null &&
-                routes.includes(highlightedRouteId);
+            const belongsToSelection = hasTripSelection
+                ? tripStationIds.has(stationId)
+                : highlightedRouteId !== null &&
+                    routes.includes(highlightedRouteId);
 
             const blockedBySelection =
                 isMapFocused &&
                 !isSelected &&
-                !belongsToRoute;
+                !belongsToSelection;
 
             const blocked =
                 isZoomedOut ||
-                stationRoutes === null ||
+                (!hasTripSelection && stationRoutes === null) ||
                 blockedBySelection;
 
             const dimmed =
                 !isSelected &&
                 (
-                    stationRoutes === null ||
-                    routes.length === 0 ||
-                    blockedBySelection
+                    blockedBySelection ||
+                    (
+                        !hasTripSelection &&
+                        (
+                            stationRoutes === null ||
+                            routes.length === 0
+                        )
+                    )
                 );
 
             element.classList.toggle("is-compact", isZoomedOut);
@@ -508,6 +606,8 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         highlightedRouteId,
         isMapFocused,
         isZoomedOut,
+        hasTripSelection,
+        tripStationIds,
     ]);
 
     useEffect(() => {
@@ -545,6 +645,10 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
 
                 if (stationId === selectedStation?.properties.id) {
                     return true;
+                }
+
+                if (hasTripSelection) {
+                    return tripStationIds.has(stationId);
                 }
 
                 if (highlightedRouteId === null) return false;
@@ -635,7 +739,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         }
 
         updateStationLabels();
-    }, [stations, stationRoutes, highlightedRouteId, selectedStation, isMapFocused, mapStyleReady]);
+    }, [stations, stationRoutes, highlightedRouteId, selectedStation, isMapFocused, mapStyleReady, hasTripSelection, tripStationIds]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -659,16 +763,23 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         : [];
 
     function isStationBlocked(station) {
-        if (stationRoutes === null) return true;
-        if (!isMapFocused) return false;
+        const stationId = station.properties.id;
 
-        if (
-            station.properties.id === selectedStation?.properties.id
-        ) {
+        if (!isMapFocused) {
+            return stationRoutes === null;
+        }
+
+        if (stationId === selectedStation?.properties.id) {
             return false;
         }
 
-        const routes = stationRoutes[station.properties.id] ?? [];
+        if (hasTripSelection) {
+            return !tripStationIds.has(stationId);
+        }
+
+        if (stationRoutes === null) return true;
+
+        const routes = stationRoutes[stationId] ?? [];
 
         return (
             highlightedRouteId === null ||
@@ -994,6 +1105,8 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                             ] ?? {}
                                         }
                                         stationDetails={stationAccessibility}
+                                        selectionKey={arrivalSelectionKey}
+                                        onTripSelectionChange={setTripSelection}
                                         refreshRef={arrivalsRefreshRef}
                                         />
                                 ) : (

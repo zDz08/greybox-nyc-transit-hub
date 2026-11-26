@@ -62,6 +62,7 @@ async function buildTripSchedules() {
         stopsByTrip.get(stop.trip_id).push({
             stationId,
             stopId: stop.stop_id,
+            sequence: Number(stop.stop_sequence),
             arrivalSeconds,
             departureSeconds,
         });
@@ -118,7 +119,9 @@ async function buildTripSchedules() {
             headsign: trip.trip_headsign?.trim() || "",
             startSeconds,
             endSeconds,
-            stops: stopsByTrip.get(trip.trip_id),
+            stops: [...stopsByTrip.get(trip.trip_id)].sort(
+                (a, b) => a.sequence - b.sequence
+            ),
         };
     });
 }

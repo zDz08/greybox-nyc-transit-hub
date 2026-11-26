@@ -1,3 +1,11 @@
+// Internal operating points, excluded from passenger stop lists.
+const INTERNAL_STOP_IDS = new Set([
+    "R60N",
+    "R60S",
+    "R65N",
+    "R65S",
+]);
+
 function toIsoTime(event) {
     const seconds = Number(event?.time);
 
@@ -60,7 +68,11 @@ export function buildRemainingStops(
 ) {
     return orderedStops
         .slice(startIndex)
-        .filter((stop) => stop.scheduleRelationship !== "SKIPPED")
+        .filter(
+            (stop) =>
+                stop.scheduleRelationship !== "SKIPPED" &&
+                !INTERNAL_STOP_IDS.has(stop.stopId)
+        )
         .map((stop, index) => {
             const details = stopDetails.get(stop.stopId);
             const noPrediction =
