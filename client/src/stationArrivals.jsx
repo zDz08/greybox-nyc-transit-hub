@@ -418,7 +418,7 @@ export default function StationArrivals({
             {result && (
                 <p className="route-selection__note">
                     Updated {formatArrivalTime(result.meta.feedUpdatedAt)}
-                    {" · New York time"}
+                    {" EST"}
                 </p>
             )}
             {selectedStopId === null && stationDetails}

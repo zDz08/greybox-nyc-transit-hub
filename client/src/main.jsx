@@ -4,6 +4,7 @@ import Account from "./account.jsx";
 import { AccountProvider } from "./accountContext.jsx";
 import SavedCommutes from "./savedCommutes.jsx";
 import TransitMap from "./transitMap.jsx";
+import ServiceStatus from "./serviceStatus.jsx";
 import "./app.css";
 
 const pages = [
@@ -107,14 +108,7 @@ function App() {
                             <p>Current disruptions and upcoming service changes.</p>
                         </header>
 
-                        <div className="app-panel app-empty">
-                            <NavigationIcon name="status" />
-                            <h2>Service overview coming soon</h2>
-                            <p>
-                                Service alerts have not been connected to this
-                                page yet.
-                            </p>
-                        </div>
+                        <ServiceStatus />
                     </section>
                 )}
 
