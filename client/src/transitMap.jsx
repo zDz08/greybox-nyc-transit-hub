@@ -685,20 +685,7 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
             }
 
             if (!map.getLayer("station-labels")) {
-                const fontLayer = map.getStyle().layers.find((layer) => {
-                    const fonts = layer.layout?.["text-font"];
-
-                    return (
-                        layer.type === "symbol" &&
-                        Array.isArray(fonts) &&
-                        fonts.length > 0 &&
-                        fonts.every((font) => typeof font === "string")
-                    );
-                });
-
-                const fonts =
-                    fontLayer?.layout?.["text-font"] ??
-                    ["Open Sans Regular"];
+                const fonts = ["Open Sans Regular"];
 
                 map.addLayer({
                     id: "station-labels",

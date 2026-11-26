@@ -142,8 +142,8 @@ body {
 .station-dot::before {
     content: "";
     box-sizing: border-box;
-    width: 10px;
-    height: 10px;
+    width: 9.5px;
+    height: 9.5px;
     border: 1.5px solid #e5e9ef;
     border-radius: 50%;
     background: #111820;
