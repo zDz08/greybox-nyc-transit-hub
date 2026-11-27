@@ -197,41 +197,87 @@ export default function StationArrivals({
         )
         : "";
 
-        const activeDelayAlerts = (alertsResult?.data.alerts ?? []).filter(
-            (alert) =>
-                /^(delays?|expect delays)$/i.test(alert.type?.trim() ?? "") &&
-                alert.activePeriods?.some(({ start, end }) =>
-                    (start == null || start * 1000 <= now) &&
-                    (end == null || now < end * 1000)
-                )
-        );
+    const activeDelayAlerts = (alertsResult?.data.alerts ?? []).filter(
+        (alert) =>
+            /^(delays?|expect delays)$/i.test(alert.type?.trim() ?? "") &&
+            alert.activePeriods?.some(({ start, end }) =>
+                (start == null || start * 1000 <= now) &&
+                (end == null || now < end * 1000)
+            )
+    );
 
-        const lineDelayAlerts = activeDelayAlerts.filter((alert) =>
+    const lineDelayAlerts = activeDelayAlerts.filter((alert) =>
+        alert.targets?.some((target) =>
+            target.routeId === routeId &&
+            !target.tripId &&
+            !target.stopId &&
+            !target.startDate &&
+            !target.startTime &&
+            target.directionId == null &&
+            target.routeType == null
+        )
+    );
+
+    function getTripDelayAlerts(arrival) {
+        return activeDelayAlerts.filter((alert) =>
             alert.targets?.some((target) =>
-                target.routeId === routeId &&
-                !target.tripId &&
+                Boolean(target.tripId) &&
+                target.tripId === arrival.tripId &&
+                (!target.routeId || target.routeId === routeId) &&
+                (!target.startDate || target.startDate === arrival.startDate) &&
+                (!target.startTime || target.startTime === arrival.startTime) &&
                 !target.stopId &&
-                !target.startDate &&
-                !target.startTime &&
                 target.directionId == null &&
                 target.routeType == null
             )
         );
+    }
 
-        function getTripDelayAlerts(arrival) {
-            return activeDelayAlerts.filter((alert) =>
-                alert.targets?.some((target) =>
-                    Boolean(target.tripId) &&
-                    target.tripId === arrival.tripId &&
-                    (!target.routeId || target.routeId === routeId) &&
-                    (!target.startDate || target.startDate === arrival.startDate) &&
-                    (!target.startTime || target.startTime === arrival.startTime) &&
-                    !target.stopId &&
-                    target.directionId == null &&
-                    target.routeType == null
-                )
+    function getSkippedStopAlert(arrival, stop) {
+        // The platform suffix and alert direction mapping are verified for route 1.
+        if (routeId !== "1" || !stop.name || !stop.stopId) return null;
+
+        const platformDirection = stop.stopId.slice(-1);
+        if (platformDirection !== "N" && platformDirection !== "S") return null;
+
+        const directionId = platformDirection === "S" ? 1 : 0;
+        const directionWord = platformDirection === "S" ? "downtown" : "uptown";
+        const parentStopId = stop.stopId.slice(0, -1);
+        const stopTime = Date.parse(stop.arrivalAt ?? stop.departureAt) / 1000;
+
+        if (!Number.isFinite(stopTime)) return null;
+
+        return (alertsResult?.data.alerts ?? []).find((alert) => {
+            if (alert.type !== "Planned - Stops Skipped") return false;
+
+            const headline = alert.title?.match(
+                /\b(uptown|downtown)\s+\[1\]\s+skips?\s+(.+)$/i
             );
-        }
+            if (headline?.[1].toLowerCase() !== directionWord) return false;
+
+            const skippedNames = headline[2]
+                .replace(/[.!]$/, "")
+                .split(/,\s*|\s+and\s+/i)
+                .map((name) => name.trim().toLowerCase());
+
+            if (!skippedNames.includes(stop.name.trim().toLowerCase())) return false;
+
+            const matchesTarget = alert.targets?.some((target) =>
+                target.routeId === routeId &&
+                (target.stopId === stop.stopId || target.stopId === parentStopId) &&
+                target.directionId != null &&
+                Number(target.directionId) === directionId &&
+                (!target.tripId || target.tripId === arrival.tripId) &&
+                (!target.startDate || target.startDate === arrival.startDate) &&
+                (!target.startTime || target.startTime === arrival.startTime)
+            );
+
+            return matchesTarget && alert.activePeriods?.some(({ start, end }) =>
+                (start == null || start <= stopTime) &&
+                (end == null || stopTime < end)
+            );
+        }) ?? null;
+    }
 
     const pageTitle = selectedArrivalId
         ? "Remaining stops"
@@ -457,29 +503,45 @@ export default function StationArrivals({
                     )}
 
                     <ol className="trip-stops">
-                        {(selectedArrival.remainingStops ?? []).map(
-                            (stop, index) => (
+                        {(selectedArrival.remainingStops ?? []).map((stop, index) => {
+                            const skippedAlert = getSkippedStopAlert(selectedArrival, stop);
+
+                            return (
                                 <li
                                     key={`${stop.stopId ?? "unknown"}:${index}`}
+                                    className={skippedAlert ? "trip-stops__row--skipped" : undefined}
                                 >
                                     <span className="trip-stops__number">
                                         {index + 1}
                                     </span>
 
                                     <span className="trip-stops__name">
-                                        {stop.name ??
-                                            `Unknown stop (${stop.stopId ?? "—"})`}
-                                        {index === 0 && (
-                                            <small>Selected station</small>
-                                        )}
+                                        {stop.name ?? `Unknown stop (${stop.stopId ?? "—"})`}
+
+                                        {index === 0 && <small>Selected station</small>}
                                     </span>
 
                                     <span className="trip-stops__time">
-                                        {formatArrivalTime(stop.arrivalAt)}
+                                        {skippedAlert ? (
+                                            <button
+                                                type="button"
+                                                className="trip-stops__alert-link"
+                                                aria-label={`View service alert: ${stop.name} skipped`}
+                                                onClick={() => onOpenAlerts(
+                                                    routeId,
+                                                    skippedAlert.status,
+                                                    skippedAlert.id
+                                                )}
+                                            >
+                                                Skipped
+                                            </button>
+                                        ) : (
+                                            formatArrivalTime(stop.arrivalAt)
+                                        )}
                                     </span>
                                 </li>
-                            )
-                        )}
+                            );
+                        })}
                     </ol>
                 </>
             ) : (
