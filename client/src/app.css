@@ -538,6 +538,19 @@ input:focus-visible {
     background: #202730;
 }
 
+.trip-row__trailing {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 10px;
+}
+
+.trip-row__chevron {
+    color: var(--app-accent);
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
 .trip-row__body,
 .trip-summary {
     display: grid;
@@ -626,4 +639,98 @@ input:focus-visible {
 
 .app-shell .trip-row .direction-card__time > span {
     font-size: 0.6875rem;
+}
+
+.trip-list__entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid #303944;
+}
+
+.station-card .trip-list__entry .trip-row {
+    flex: 1 1 auto;
+    min-width: 0;
+    border-bottom: 0;
+}
+
+.station-card .trip-delay-notice {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    padding: 6px 10px;
+    border: 1px solid #82563e;
+    border-radius: 8px;
+    background: #38271f;
+    color: #ffbd8c;
+    font: inherit;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.station-card .trip-list__entry .trip-delay-notice {
+    flex: 0 0 auto;
+    max-width: 34%;
+    margin-inline-end: 4px;
+    text-align: left;
+}
+
+.service-alert--targeted {
+    outline: 2px solid var(--app-accent);
+    outline-offset: -2px;
+}
+
+.trip-delay-links {
+    display: grid;
+    justify-items: start;
+    gap: 2px;
+    margin-bottom: 0px;
+}
+
+.station-card .trip-delay-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0 4px;
+    border: 0;
+    background: transparent;
+    color: #ffbd8c;
+    font: inherit;
+    font-size: 0.875rem;
+    text-align: left;
+    cursor: pointer;
+}
+
+.station-card .trip-delay-link:hover {
+    text-decoration: underline;
+}
+
+.station-card .trip-delay-link:focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 2px;
+}
+
+.station-card .trip-stops__alert-link {
+    display: block;
+    margin: 0;
+    padding: 0;
+    min-height: 24px;
+    border: 0;
+    background: transparent;
+    color: #ffbd8c;
+    font: inherit;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-align: left;
+    text-decoration: none;
+    text-underline-offset: 2px;
+    cursor: pointer;
+}
+
+.station-card .trip-stops__alert-link:focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 2px;
 }

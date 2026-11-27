@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import SaveCommute from "./saveCommute.jsx";
+import { AccessibilityPage, StationInfoLinks } from "./stationInfoLinks.jsx";
+import { useServiceAlerts } from "./serviceAlertsContext.jsx";
 
 function getDirectionLabel(stopId, labels, destinationLabels) {
     const destinations = destinationLabels?.[stopId];
@@ -38,6 +40,9 @@ export default function StationArrivals({
     initialStopId,
     onSignIn,
     stationDetails,
+    accessibilityEnabled,
+    accessibility,
+    onOpenAlerts,
     selectionKey,
     onTripSelectionChange,
 }) {
@@ -48,6 +53,12 @@ export default function StationArrivals({
     );
     const [selectedArrivalId, setSelectedArrivalId] = useState(null);
     const [now, setNow] = useState(Date.now());
+    const [showAccessibility, setShowAccessibility] = useState(false);
+    const { result: alertsResult } = useServiceAlerts();
+
+    useEffect(() => {
+        if (!accessibilityEnabled) setShowAccessibility(false);
+    }, [accessibilityEnabled]);
 
     useEffect(() => {
         setSelectedStopId(initialStopId ?? null);
@@ -186,6 +197,88 @@ export default function StationArrivals({
         )
         : "";
 
+    const activeDelayAlerts = (alertsResult?.data.alerts ?? []).filter(
+        (alert) =>
+            /^(delays?|expect delays)$/i.test(alert.type?.trim() ?? "") &&
+            alert.activePeriods?.some(({ start, end }) =>
+                (start == null || start * 1000 <= now) &&
+                (end == null || now < end * 1000)
+            )
+    );
+
+    const lineDelayAlerts = activeDelayAlerts.filter((alert) =>
+        alert.targets?.some((target) =>
+            target.routeId === routeId &&
+            !target.tripId &&
+            !target.stopId &&
+            !target.startDate &&
+            !target.startTime &&
+            target.directionId == null &&
+            target.routeType == null
+        )
+    );
+
+    function getTripDelayAlerts(arrival) {
+        return activeDelayAlerts.filter((alert) =>
+            alert.targets?.some((target) =>
+                Boolean(target.tripId) &&
+                target.tripId === arrival.tripId &&
+                (!target.routeId || target.routeId === routeId) &&
+                (!target.startDate || target.startDate === arrival.startDate) &&
+                (!target.startTime || target.startTime === arrival.startTime) &&
+                !target.stopId &&
+                target.directionId == null &&
+                target.routeType == null
+            )
+        );
+    }
+
+    function getSkippedStopAlert(arrival, stop) {
+        // The platform suffix and alert direction mapping are verified for route 1.
+        if (routeId !== "1" || !stop.name || !stop.stopId) return null;
+
+        const platformDirection = stop.stopId.slice(-1);
+        if (platformDirection !== "N" && platformDirection !== "S") return null;
+
+        const directionId = platformDirection === "S" ? 1 : 0;
+        const directionWord = platformDirection === "S" ? "downtown" : "uptown";
+        const parentStopId = stop.stopId.slice(0, -1);
+        const stopTime = Date.parse(stop.arrivalAt ?? stop.departureAt) / 1000;
+
+        if (!Number.isFinite(stopTime)) return null;
+
+        return (alertsResult?.data.alerts ?? []).find((alert) => {
+            if (alert.type !== "Planned - Stops Skipped") return false;
+
+            const headline = alert.title?.match(
+                /\b(uptown|downtown)\s+\[1\]\s+skips?\s+(.+)$/i
+            );
+            if (headline?.[1].toLowerCase() !== directionWord) return false;
+
+            const skippedNames = headline[2]
+                .replace(/[.!]$/, "")
+                .split(/,\s*|\s+and\s+/i)
+                .map((name) => name.trim().toLowerCase());
+
+            if (!skippedNames.includes(stop.name.trim().toLowerCase())) return false;
+
+            const matchesTarget = alert.targets?.some((target) =>
+                target.routeId === routeId &&
+                (target.stopId === stop.stopId || target.stopId === parentStopId) &&
+                target.directionId != null &&
+                Number(target.directionId) === directionId &&
+                (!target.tripId || target.tripId === arrival.tripId) &&
+                (!target.startDate || target.startDate === arrival.startDate) &&
+                (!target.startTime || target.startTime === arrival.startTime)
+            );
+
+            return matchesTarget && alert.activePeriods?.some(({ start, end }) =>
+                (start == null || start <= stopTime) &&
+                (end == null || stopTime < end)
+            );
+        }) ?? null;
+    }
+
     const pageTitle = selectedArrivalId
         ? "Remaining stops"
         : selectedStopId
@@ -198,6 +291,14 @@ export default function StationArrivals({
         } else {
             setSelectedStopId(null);
         }
+    }
+
+    if (showAccessibility && accessibilityEnabled && selectedStopId === null) {
+        return (
+            <AccessibilityPage onBack={() => setShowAccessibility(false)}>
+                {stationDetails}
+            </AccessibilityPage>
+        );
     }
 
     return (
@@ -287,14 +388,27 @@ export default function StationArrivals({
                 </div>
             ) : !selectedArrivalId ? (
                 <>
-                    <p className="arrival-page__subtitle">
-                        {directionLabel}
-                    </p>
-
+                    {lineDelayAlerts.length > 0 && (
+                        <div className="trip-delay-links">
+                            {lineDelayAlerts.map((alert) => (
+                                <button
+                                    key={alert.id}
+                                    type="button"
+                                    className="trip-delay-link"
+                                    onClick={() => onOpenAlerts(routeId, alert.status, alert.id)}
+                                >
+                                    Delays <span aria-hidden="true">›</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="trip-list">
-                        {upcoming.map((arrival) => (
+                        {upcoming.map((arrival) => {
+                            const delayAlerts = getTripDelayAlerts(arrival);
+
+                            return (
+                                <div className="trip-list__entry" key={arrival.id}>
                             <button
-                                key={arrival.id}
                                 type="button"
                                 className="trip-row"
                                 onClick={() => setSelectedArrivalId(arrival.id)}
@@ -311,12 +425,33 @@ export default function StationArrivals({
                                     </span>
                                 </span>
 
-                                <span className="direction-card__time">
-                                    <strong>{getMinutes(arrival, now)}</strong>
-                                    <span>min</span>
+                                <span className="trip-row__trailing">
+                                    <span className="direction-card__time">
+                                        <strong>{getMinutes(arrival, now)}</strong>
+                                        <span>min</span>
+                                    </span>
+
+                                    <span className="trip-row__chevron" aria-hidden="true">›</span>
                                 </span>
                             </button>
-                        ))}
+                                    {delayAlerts.map((alert) => (
+                                        <button
+                                            key={alert.id}
+                                            type="button"
+                                            className="trip-delay-notice"
+                                            onClick={() => {
+                                                const statusRoute = alert.routeIds.includes(routeId)
+                                                    ? routeId
+                                                    : "";
+                                                onOpenAlerts(statusRoute, alert.status, alert.id);
+                                            }}
+                                        >
+                                            {alert.type} <span aria-hidden="true">›</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {canShowPredictions && upcoming.length === 0 && (
@@ -368,29 +503,45 @@ export default function StationArrivals({
                     )}
 
                     <ol className="trip-stops">
-                        {(selectedArrival.remainingStops ?? []).map(
-                            (stop, index) => (
+                        {(selectedArrival.remainingStops ?? []).map((stop, index) => {
+                            const skippedAlert = getSkippedStopAlert(selectedArrival, stop);
+
+                            return (
                                 <li
                                     key={`${stop.stopId ?? "unknown"}:${index}`}
+                                    className={skippedAlert ? "trip-stops__row--skipped" : undefined}
                                 >
                                     <span className="trip-stops__number">
                                         {index + 1}
                                     </span>
 
                                     <span className="trip-stops__name">
-                                        {stop.name ??
-                                            `Unknown stop (${stop.stopId ?? "—"})`}
-                                        {index === 0 && (
-                                            <small>Selected station</small>
-                                        )}
+                                        {stop.name ?? `Unknown stop (${stop.stopId ?? "—"})`}
+
+                                        {index === 0 && <small>Selected station</small>}
                                     </span>
 
                                     <span className="trip-stops__time">
-                                        {formatArrivalTime(stop.arrivalAt)}
+                                        {skippedAlert ? (
+                                            <button
+                                                type="button"
+                                                className="trip-stops__alert-link"
+                                                aria-label={`View service alert: ${stop.name} skipped`}
+                                                onClick={() => onOpenAlerts(
+                                                    routeId,
+                                                    skippedAlert.status,
+                                                    skippedAlert.id
+                                                )}
+                                            >
+                                                Skipped
+                                            </button>
+                                        ) : (
+                                            formatArrivalTime(stop.arrivalAt)
+                                        )}
                                     </span>
                                 </li>
-                            )
-                        )}
+                            );
+                        })}
                     </ol>
                 </>
             ) : (
@@ -421,7 +572,15 @@ export default function StationArrivals({
                     {" EST"}
                 </p>
             )}
-            {selectedStopId === null && stationDetails}
+            {selectedStopId === null && (
+                <StationInfoLinks
+                    routeId={routeId}
+                    onOpenAlerts={onOpenAlerts}
+                    accessibilityEnabled={accessibilityEnabled}
+                    accessibility={accessibility}
+                    onAccessibility={() => setShowAccessibility(true)}
+                />
+            )}
         </section>
     );
 }

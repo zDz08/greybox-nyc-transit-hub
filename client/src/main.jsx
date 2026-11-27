@@ -5,6 +5,7 @@ import { AccountProvider } from "./accountContext.jsx";
 import SavedCommutes from "./savedCommutes.jsx";
 import TransitMap from "./transitMap.jsx";
 import ServiceStatus from "./serviceStatus.jsx";
+import { ServiceAlertsProvider } from "./serviceAlertsContext.jsx";
 import "./app.css";
 
 const pages = [
@@ -43,6 +44,12 @@ function NavigationIcon({ name }) {
 function App() {
     const [activePage, setActivePage] = useState("map");
     const [requestedCommute, setRequestedCommute] = useState(null);
+    const [statusRequest, setStatusRequest] = useState(null);
+
+    function openAlerts(routeId, tab, alertId = null) {
+        setStatusRequest({ routeId, tab, alertId });
+        setActivePage("status");
+    }
 
     return (
         <div className="app-shell">
@@ -61,7 +68,10 @@ function App() {
                             aria-current={
                                 activePage === page.id ? "page" : undefined
                             }
-                            onClick={() => setActivePage(page.id)}
+                            onClick={() => {
+                                if (page.id === "status") setStatusRequest(null);
+                                setActivePage(page.id);
+                            }}
                         >
                             <NavigationIcon name={page.id} />
                             <span>{page.label}</span>
@@ -77,6 +87,7 @@ function App() {
                 >
                     <TransitMap
                         requestedCommute={requestedCommute}
+                        onOpenAlerts={openAlerts}
                         onSignIn={() => setActivePage("settings")}
                     />
                 </div>
@@ -108,7 +119,13 @@ function App() {
                             <p>Current disruptions and upcoming service changes.</p>
                         </header>
 
-                        <ServiceStatus />
+                        <ServiceStatus
+                            key={statusRequest ? `${statusRequest.routeId}:${statusRequest.tab}` : "all"}
+                            initialRouteId={statusRequest?.routeId}
+                            initialTab={statusRequest?.tab}
+                            onSignIn={() => setActivePage("settings")}
+                            initialAlertId={statusRequest?.alertId}
+                        />
                     </section>
                 )}
 
@@ -139,4 +156,4 @@ function App() {
     );
 }
 
-createRoot(document.getElementById("root")).render(<AccountProvider><App /></AccountProvider>);
+createRoot(document.getElementById("root")).render(<AccountProvider><ServiceAlertsProvider><App /></ServiceAlertsProvider></AccountProvider>);

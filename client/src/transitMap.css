@@ -465,3 +465,213 @@ body {
 .station-card__toggle svg {
     display: block;
 }
+
+.accessibility-control {
+    position: relative;
+    flex: 0 0 auto;
+}
+
+.station-search .accessibility-control__button {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    border: 1px solid var(--app-border);
+    border-radius: 50%;
+    background: var(--app-surface);
+    color: #e7edf3;
+    cursor: pointer;
+}
+
+.station-search .accessibility-control__button[data-active="true"] {
+    background: var(--app-accent);
+    border-color: var(--app-accent);
+    color: #111820;
+}
+
+.accessibility-control__button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.accessibility-options {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    z-index: 30;
+    box-sizing: border-box;
+    width: min(300px, calc(100vw - 32px));
+    padding: 16px;
+    border: 1px solid var(--app-border);
+    border-radius: 16px;
+    background: var(--app-surface);
+    color: #e7edf3;
+    box-shadow: 0 12px 32px #0006;
+}
+
+.station-search .accessibility-options label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 44px;
+    margin-top: 10px;
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.station-search .accessibility-options input[type="checkbox"] {
+    appearance: auto;
+    flex: 0 0 18px;
+    width: 18px;
+    height: 18px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    accent-color: var(--app-accent);
+}
+
+.accessibility-control button:focus-visible,
+.accessibility-options input:focus-visible,
+.access-details summary:focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 3px;
+}
+
+.access-details {
+    font-size: 0.875rem;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+}
+
+.access-details__overview {
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #ffffff06;
+}
+
+.access-details__overview > strong {
+    font-size: 1rem;
+}
+
+.station-card .access-details p {
+    margin: 8px 0;
+    color: var(--app-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    white-space: pre-line;
+}
+
+.access-details__notes {
+    margin: 12px 0;
+}
+
+.access-details summary {
+    cursor: pointer;
+}
+
+.access-group {
+    margin-top: 12px;
+    border-top: 1px solid var(--app-border);
+}
+
+.access-group > summary {
+    padding: 14px 0;
+    font-weight: 600;
+}
+
+.access-group > summary > span {
+    margin-left: 8px;
+    color: var(--app-muted);
+    font-weight: 400;
+}
+
+.access-group__items {
+    display: grid;
+    gap: 8px;
+    padding-bottom: 8px;
+}
+
+.access-equipment {
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: #ffffff03;
+}
+
+.access-equipment > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 48px;
+    padding: 8px 12px;
+    list-style: none;
+}
+
+.access-equipment > summary::-webkit-details-marker {
+    display: none;
+}
+
+.access-equipment > summary::after {
+    content: "+";
+    flex-shrink: 0;
+    color: var(--app-muted);
+}
+
+.access-equipment[open] > summary::after {
+    content: "−";
+}
+
+.access-equipment__identity {
+    display: grid;
+    gap: 2px;
+    flex: 1;
+}
+
+.access-equipment__identity small {
+    color: var(--app-muted);
+}
+
+.access-equipment__status {
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+.access-equipment__status[data-status="outage"] {
+    color: #ffb28b;
+}
+
+.access-equipment__status[data-status="available"] {
+    color: #73d99b;
+}
+
+.access-equipment__status[data-status="planned"] {
+    color: var(--app-accent);
+}
+
+.access-equipment__body {
+    padding: 0 12px 12px;
+    border-top: 1px solid var(--app-border);
+}
+
+.access-equipment dl {
+    display: grid;
+    grid-template-columns: minmax(80px, 0.7fr) minmax(0, 1.3fr);
+    gap: 8px 12px;
+    margin: 12px 0;
+}
+
+.access-equipment dt {
+    color: var(--app-muted);
+}
+
+.access-equipment dd {
+    margin: 0;
+}
+
+.access-equipment__alternative {
+    padding: 10px;
+    border-left: 2px solid var(--app-accent);
+    background: #ffffff04;
+}

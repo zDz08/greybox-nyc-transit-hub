@@ -1,0 +1,37 @@
+.station-info-links {
+    display: grid;
+    gap: 8px;
+    margin-top: 12px;
+}
+.station-card .station-info-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    min-height: 52px;
+    margin: 0;
+    padding: 10px 14px;
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: var(--app-surface);
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+.station-info-link > span:first-child {
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+}
+.station-info-link strong { font-size: 0.9rem; }
+.station-info-link small { color: var(--app-muted); font-size: 0.8rem; }
+.station-info-link > span:last-child { font-size: 24px; color: var(--app-accent); }
+.station-card .station-info-link:hover { border-color: var(--app-accent); }
+.station-card .station-info-link:focus-visible {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 3px;
+}
+.station-info__heading { margin-bottom: 16px; }
+.station-info__heading h3 { margin: 0; font-size: 1rem; }
