@@ -54,10 +54,21 @@ function normalizeStationName(name = "") {
 }
 
 function parseRoutes(routeString = "") {
-    return String(routeString)
+    const rawTokens = String(routeString)
         .split(/[\/,\s]+/)
         .map((r) => r.trim().toUpperCase())
         .filter(Boolean);
+
+    const expanded = new Set();
+    for (const token of rawTokens) {
+        expanded.add(token);
+        if (/^[A-Z0-9]{2,}$/.test(token) && !/^(SIR|SI)$/.test(token)) {
+            for (const ch of token) {
+                expanded.add(ch);
+            }
+        }
+    }
+    return [...expanded];
 }
 
 function mapAdaCode(adaCode) {
@@ -75,23 +86,13 @@ function matchesStationAndRoutes(
 ) {
     if (!stationNorm) return false;
     const recordNorm = normalizeStationName(recordStationName);
-    if (!recordNorm) return false;
-
-    const exactMatch = recordNorm === stationNorm;
-    const tokenSubsetMatch =
-        !exactMatch &&
-        recordNorm.length >= 4 &&
-        stationNorm.length >= 4 &&
-        (` ${stationNorm} `.includes(` ${recordNorm} `) ||
-            ` ${recordNorm} `.includes(` ${stationNorm} `));
-
-    if (!exactMatch && !tokenSubsetMatch) {
+    if (!recordNorm || recordNorm !== stationNorm) {
         return false;
     }
 
     const recordRoutes = parseRoutes(recordRouteString);
     if (recordRoutes.length === 0 || stationRoutes.size === 0) {
-        return exactMatch;
+        return true;
     }
 
     return recordRoutes.some((route) => stationRoutes.has(route));
@@ -165,20 +166,33 @@ export function getStationAccessibility(
     const stationNorm = normalizeStationName(station.stop_name);
     const stationRoutes = new Set(parseRoutes(station.daytime_routes ?? ""));
 
-    const matchedEquipments = equipments.filter((eq) =>
-        matchesStationAndRoutes(
-            eq.station,
-            eq.linesservedbyelevator || eq.trainno,
-            stationNorm,
-            stationRoutes
-        )
-    );
+    const matchedEquipments = equipmentFeedAvailable
+        ? equipments.filter((eq) =>
+              matchesStationAndRoutes(
+                  eq.station,
+                  eq.linesservedbyelevator || eq.trainno,
+                  stationNorm,
+                  stationRoutes
+              )
+          )
+        : [];
 
+    const uniqueEquipments = [];
+    const seenEquipmentCodes = new Set();
     const equipmentByCode = new Map();
+
     for (const eq of matchedEquipments) {
-        if (eq.equipmentno && !equipmentByCode.has(eq.equipmentno)) {
-            equipmentByCode.set(eq.equipmentno, eq);
+        const code = eq.equipmentno;
+        if (code) {
+            if (!equipmentByCode.has(code)) {
+                equipmentByCode.set(code, eq);
+            }
+            if (seenEquipmentCodes.has(code)) {
+                continue;
+            }
+            seenEquipmentCodes.add(code);
         }
+        uniqueEquipments.push(eq);
     }
 
     const matchedOutages = outageFeedAvailable
@@ -232,13 +246,15 @@ export function getStationAccessibility(
         .map(formatOutage);
     const upcomingOutages = upcomingItems.map(formatOutage);
 
-    const normalizedEquipments = matchedEquipments.map((eq) => {
+    const canDetermineEquipmentStatus = outageFeedAvailable && equipmentFeedAvailable;
+
+    const normalizedEquipments = uniqueEquipments.map((eq) => {
         const code = eq.equipmentno;
         const isActive = eq.isactive === "Y";
         const isOutOfService =
-            outageFeedAvailable && isActive && activeEquipmentCodes.has(code);
+            canDetermineEquipmentStatus && isActive && activeEquipmentCodes.has(code);
         const hasUpcomingOutage =
-            outageFeedAvailable &&
+            canDetermineEquipmentStatus &&
             isActive &&
             !isOutOfService &&
             upcomingEquipmentCodes.has(code);
@@ -246,7 +262,7 @@ export function getStationAccessibility(
         let status = "unknown";
         if (!isActive) {
             status = "inactive";
-        } else if (!outageFeedAvailable) {
+        } else if (!canDetermineEquipmentStatus) {
             status = "unknown";
         } else if (isOutOfService) {
             status = "out-of-service";
@@ -270,12 +286,12 @@ export function getStationAccessibility(
         };
     });
 
-    const availableElevators = outageFeedAvailable
+    const availableElevators = canDetermineEquipmentStatus
         ? normalizedEquipments.filter(
               (eq) => eq.type === "EL" && eq.status === "available"
           )
         : [];
-    const availableEscalators = outageFeedAvailable
+    const availableEscalators = canDetermineEquipmentStatus
         ? normalizedEquipments.filter(
               (eq) => eq.type === "ES" && eq.status === "available"
           )
@@ -292,10 +308,10 @@ export function getStationAccessibility(
         hasOutage,
         elevatorsOutOfServiceCount: outageFeedAvailable ? elevatorsOut.length : null,
         escalatorsOutOfServiceCount: outageFeedAvailable ? escalatorsOut.length : null,
-        availableElevatorCount: outageFeedAvailable
+        availableElevatorCount: canDetermineEquipmentStatus
             ? availableElevators.length
             : null,
-        availableEscalatorCount: outageFeedAvailable
+        availableEscalatorCount: canDetermineEquipmentStatus
             ? availableEscalators.length
             : null,
         upcomingOutageCount: outageFeedAvailable ? upcomingOutages.length : null,

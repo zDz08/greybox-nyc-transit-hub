@@ -776,29 +776,8 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
         ? stationRoutes?.[selectedStation.properties.id] ?? []
         : [];
 
-    function isStationBlocked(station) {
-        const stationId = station.properties.id;
-
-        if (!isMapFocused) {
-            return stationRoutes === null;
-        }
-
-        if (stationId === selectedStation?.properties.id) {
-            return false;
-        }
-
-        if (hasTripSelection) {
-            return !tripStationIds.has(stationId);
-        }
-
-        if (stationRoutes === null) return true;
-
-        const routes = stationRoutes[stationId] ?? [];
-
-        return (
-            highlightedRouteId === null ||
-            !routes.includes(highlightedRouteId)
-        );
+    function isStationBlocked() {
+        return stationRoutes === null;
     }
 
     const effectiveAdaOnly = accessibilityMode && adaOnly;
@@ -1015,6 +994,11 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                     const status = acc?.adaStatus;
                                     const outageKnown = acc?.outageFeedAvailable !== false;
                                     const hasOutage = outageKnown && Boolean(acc?.hasOutage);
+                                    const rowRoutes =
+                                        stationRoutes?.[station.properties.id] ??
+                                        station.properties.routes ??
+                                        [];
+
                                     return (
                                         <button
                                             key={station.properties.id}
@@ -1022,7 +1006,12 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                             disabled={isStationBlocked(station)}
                                             onClick={() => selectStation(station)}
                                         >
-                                            <span>{station.properties.name}</span>
+                                            <span>
+                                                {station.properties.name}
+                                                {rowRoutes.length > 0
+                                                    ? ` (${rowRoutes.join(", ")})`
+                                                    : ""}
+                                            </span>
                                             {accessibilityMode && (
                                                 <span>
                                                     {effectiveAdaOnly && status
