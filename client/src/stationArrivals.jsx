@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import SaveCommute from "./saveCommute.jsx";
+import { AccessibilityPage, StationInfoLinks } from "./stationInfoLinks.jsx";
 
 function getDirectionLabel(stopId, labels, destinationLabels) {
     const destinations = destinationLabels?.[stopId];
@@ -38,6 +39,9 @@ export default function StationArrivals({
     initialStopId,
     onSignIn,
     stationDetails,
+    accessibilityEnabled,
+    accessibility,
+    onOpenAlerts,
     selectionKey,
     onTripSelectionChange,
 }) {
@@ -48,6 +52,11 @@ export default function StationArrivals({
     );
     const [selectedArrivalId, setSelectedArrivalId] = useState(null);
     const [now, setNow] = useState(Date.now());
+    const [showAccessibility, setShowAccessibility] = useState(false);
+
+    useEffect(() => {
+        if (!accessibilityEnabled) setShowAccessibility(false);
+    }, [accessibilityEnabled]);
 
     useEffect(() => {
         setSelectedStopId(initialStopId ?? null);
@@ -198,6 +207,14 @@ export default function StationArrivals({
         } else {
             setSelectedStopId(null);
         }
+    }
+
+    if (showAccessibility && accessibilityEnabled && selectedStopId === null) {
+        return (
+            <AccessibilityPage onBack={() => setShowAccessibility(false)}>
+                {stationDetails}
+            </AccessibilityPage>
+        );
     }
 
     return (
@@ -421,7 +438,15 @@ export default function StationArrivals({
                     {" EST"}
                 </p>
             )}
-            {selectedStopId === null && stationDetails}
+            {selectedStopId === null && (
+                <StationInfoLinks
+                    routeId={routeId}
+                    onOpenAlerts={onOpenAlerts}
+                    accessibilityEnabled={accessibilityEnabled}
+                    accessibility={accessibility}
+                    onAccessibility={() => setShowAccessibility(true)}
+                />
+            )}
         </section>
     );
 }

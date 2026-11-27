@@ -6,6 +6,7 @@ import "./transitMap.css";
 import { getRouteStyle, routeColors } from "./routeColors.js";
 import { startAutoRefresh } from "./autoRefresh.js";
 import StationArrivals from "./stationArrivals.jsx";
+import { StationInfoOnly } from "./stationInfoLinks.jsx";
 
 const MAP_MIN_ZOOM = 12;
 const STATION_INTERACTION_ZOOM = 12.5;
@@ -100,7 +101,7 @@ function renderOutageList(items) {
     );
 }
 
-export default function TransitMap({ requestedCommute, onSignIn }) {
+export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const markerElementsRef = useRef(new Map());
@@ -1172,12 +1173,20 @@ export default function TransitMap({ requestedCommute, onSignIn }) {
                                             ] ?? {}
                                         }
                                         stationDetails={stationAccessibility}
+                                        accessibilityEnabled={accessibilityMode}
+                                        accessibility={selectedStation.properties.accessibility}
+                                        onOpenAlerts={onOpenAlerts}
                                         selectionKey={arrivalSelectionKey}
                                         onTripSelectionChange={setTripSelection}
                                         refreshRef={arrivalsRefreshRef}
                                         />
                                 ) : (
-                                    stationAccessibility
+                                    <StationInfoOnly
+                                        key={selectedStation.properties.id}
+                                        details={stationAccessibility}
+                                        accessibilityEnabled={accessibilityMode}
+                                        accessibility={selectedStation.properties.accessibility}
+                                    />
                                 )}
                             </div>
                         </>

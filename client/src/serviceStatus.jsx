@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from "react";
-import { startAutoRefresh } from "./autoRefresh.js";
+import React, { useState } from "react";
+import { useServiceAlerts } from "./serviceAlertsContext.jsx";
+import { useAccount } from "./accountContext.jsx";
 import { getRouteStyle } from "./routeColors.js";
 import "./serviceStatus.css";
 
@@ -23,79 +24,30 @@ function formatTime(value) {
     return value ? dateFormatter.format(new Date(value)) : "";
 }
 
-export default function ServiceStatus() {
-    const [result, setResult] = useState(null);
-    const [error, setError] = useState("");
-    const [routeId, setRouteId] = useState("");
-    const [tab, setTab] = useState("current");
-
-    useEffect(() => {
-        let disposed = false;
-        let controller;
-
-        async function refresh() {
-            controller = new AbortController();
-
-            const timeout = setTimeout(
-                () => controller.abort(),
-                15000
-            );
-
-            try {
-                const response = await fetch(
-                    "/api/transit/service-alerts",
-                    {
-                        signal: controller.signal,
-                        cache: "no-store",
-                    }
-                );
-
-                if (!response.ok) {
-                    throw new Error("Service alerts request failed.");
-                }
-
-                const payload = await response.json();
-
-                if (
-                    !Array.isArray(payload.data?.alerts) ||
-                    !payload.meta?.feedUpdatedAt
-                ) {
-                    throw new Error("Invalid service alerts response.");
-                }
-
-                if (!disposed) {
-                    setResult(payload);
-                    setError("");
-                }
-            } catch {
-                if (!disposed) {
-                    setError(
-                        "Could not update service alerts. Retrying automatically."
-                    );
-                }
-            } finally {
-                clearTimeout(timeout);
-            }
-        }
-
-        const stop = startAutoRefresh([
-            {
-                name: "service-alerts",
-                run: refresh,
-            },
-        ]);
-
-        return () => {
-            disposed = true;
-            stop();
-            controller?.abort();
-        };
-    }, []);
+export default function ServiceStatus({ initialRouteId = "", initialTab = "current", onSignIn }) {
+    const { result, error } = useServiceAlerts();
+    const { session, reloadProfile } = useAccount();
+    const [routeId, setRouteId] = useState(initialRouteId);
+    const [tab, setTab] = useState(initialTab);
 
     const alerts = result?.data.alerts ?? [];
 
-    const filtered = alerts.filter(
-        (alert) => !routeId || alert.routeIds.includes(routeId)
+    const savedRoutes = new Set(
+        session.status === "ready"
+            ? (session.profile?.savedCommutes ?? []).map((item) => item.routeId)
+            : []
+    );
+    const savedMessage = routeId !== "saved" ? "" :
+        session.status === "loading" ? "Loading saved lines…" :
+        session.status === "unavailable" ? "Accounts are unavailable." :
+        !session.user ? "Sign in to view alerts for your saved lines." :
+        session.status === "error" ? "Could not load your saved lines." :
+        !savedRoutes.size ? "Save a commute to see alerts for your lines here." : "";
+
+    const filtered = alerts.filter((alert) =>
+        routeId === "saved"
+            ? alert.routeIds.some((route) => savedRoutes.has(route))
+            : !routeId || alert.routeIds.includes(routeId)
     );
 
     const visible = filtered
@@ -131,6 +83,7 @@ export default function ServiceStatus() {
                         onChange={(event) => setRouteId(event.target.value)}
                     >
                         <option value="">All subway lines</option>
+                        <option value="saved">Saved lines</option>
                         {availableRoutes.map((route) => (
                             <option key={route} value={route}>
                                 {route}
@@ -162,6 +115,18 @@ export default function ServiceStatus() {
                 </div>
             </div>
 
+            {savedMessage && (
+                <div className="app-panel">
+                    <p role="status">{savedMessage}</p>
+                    {session.status === "guest" && (
+                        <button type="button" onClick={onSignIn}>Sign in</button>
+                    )}
+                    {session.status === "error" && (
+                        <button type="button" onClick={reloadProfile}>Retry account</button>
+                    )}
+                </div>
+            )}
+
             {error && (
                 <p className="service-status__warning" role="alert">
                     {error}
@@ -179,7 +144,7 @@ export default function ServiceStatus() {
                 <p role="status">Fetching service updates…</p>
             )}
 
-            {result && visible.length === 0 && (
+            {result && !savedMessage && visible.length === 0 && (
                 <div className="app-panel">
                     <p>
                         {tab === "current"
