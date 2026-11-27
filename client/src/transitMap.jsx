@@ -230,6 +230,28 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
         mapRef.current = map;
         map.on("load", () => {
             for (const layer of map.getStyle().layers) {
+                if (layer.type === "line" && /^(road|tunnel|bridge)_/.test(layer.id)) {
+                    const isMajorRoad = /_(pri|trunk|mot)_/.test(layer.id);
+
+                    map.setPaintProperty(
+                        layer.id,
+                        "line-opacity",
+                        isMajorRoad ? 0.55 : 0.32
+                    );
+                }
+
+                if (layer.type === "fill" && layer.id === "building") {
+                    map.setPaintProperty(layer.id, "fill-opacity", 0.35);
+                }
+
+                if (layer.type === "fill" && layer.id === "building-top") {
+                    map.setPaintProperty(layer.id, "fill-opacity", [
+                        "interpolate", ["linear"], ["zoom"],
+                        13, 0,
+                        16, 0.35,
+                    ]);
+                }
+
                 if (layer.type === "symbol") {
                     map.setLayerZoomRange(
                         layer.id,

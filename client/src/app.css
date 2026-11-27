@@ -538,6 +538,19 @@ input:focus-visible {
     background: #202730;
 }
 
+.trip-row__trailing {
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+    gap: 10px;
+}
+
+.trip-row__chevron {
+    color: var(--app-accent);
+    font-size: 1.25rem;
+    line-height: 1;
+}
+
 .trip-row__body,
 .trip-summary {
     display: grid;

@@ -304,10 +304,6 @@ export default function StationArrivals({
                 </div>
             ) : !selectedArrivalId ? (
                 <>
-                    <p className="arrival-page__subtitle">
-                        {directionLabel}
-                    </p>
-
                     <div className="trip-list">
                         {upcoming.map((arrival) => (
                             <button
@@ -328,9 +324,13 @@ export default function StationArrivals({
                                     </span>
                                 </span>
 
-                                <span className="direction-card__time">
-                                    <strong>{getMinutes(arrival, now)}</strong>
-                                    <span>min</span>
+                                <span className="trip-row__trailing">
+                                    <span className="direction-card__time">
+                                        <strong>{getMinutes(arrival, now)}</strong>
+                                        <span>min</span>
+                                    </span>
+
+                                    <span className="trip-row__chevron" aria-hidden="true">›</span>
                                 </span>
                             </button>
                         ))}
