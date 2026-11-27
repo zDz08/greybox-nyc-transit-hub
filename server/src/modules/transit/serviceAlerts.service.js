@@ -44,19 +44,24 @@ export function normalizeAlerts(feed, now = Date.now()) {
 
         if (!current && !future.length) return [];
 
+        const targets = (alert.informed_entity ?? [])
+            .filter((item) => !item.agency_id || item.agency_id === "MTASBWY")
+            .map((item) => {
+                const routeId = item.route_id ?? item.trip?.route_id ?? null;
+
+                return {
+                    routeId: routeId === "SIR" ? "SI" : routeId,
+                    stopId: item.stop_id ?? null,
+                    tripId: item.trip?.trip_id ?? null,
+                    startDate: item.trip?.start_date ?? null,
+                    startTime: item.trip?.start_time ?? null,
+                    directionId: item.direction_id ?? item.trip?.direction_id ?? null,
+                    routeType: item.route_type ?? null,
+                };
+            });
+
         const routeIds = [
-            ...new Set(
-                (alert.informed_entity ?? [])
-                    .filter(
-                        (item) =>
-                            !item.agency_id ||
-                            item.agency_id === "MTASBWY"
-                    )
-                    .map((item) =>
-                        item.route_id === "SIR" ? "SI" : item.route_id
-                    )
-                    .filter(Boolean)
-            ),
+            ...new Set(targets.map((target) => target.routeId).filter(Boolean)),
         ].sort();
 
         return [{
@@ -65,6 +70,7 @@ export function normalizeAlerts(feed, now = Date.now()) {
             description: english(alert.description_text),
             type: extra.alert_type || "Service update",
             routeIds,
+            targets,
             status: current ? "current" : "upcoming",
             nextStart: future.length
                 ? new Date(

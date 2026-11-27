@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useServiceAlerts } from "./serviceAlertsContext.jsx";
 import { useAccount } from "./accountContext.jsx";
 import { getRouteStyle } from "./routeColors.js";
@@ -24,7 +24,7 @@ function formatTime(value) {
     return value ? dateFormatter.format(new Date(value)) : "";
 }
 
-export default function ServiceStatus({ initialRouteId = "", initialTab = "current", onSignIn }) {
+export default function ServiceStatus({ initialRouteId = "", initialTab = "current", onSignIn, initialAlertId = null }) {
     const { result, error } = useServiceAlerts();
     const { session, reloadProfile } = useAccount();
     const [routeId, setRouteId] = useState(initialRouteId);
@@ -57,6 +57,18 @@ export default function ServiceStatus({ initialRouteId = "", initialTab = "curre
                 ? Date.parse(a.nextStart) - Date.parse(b.nextStart)
                 : a.title.localeCompare(b.title)
         );
+    
+    const alertTargetRef = useRef(null);
+    const targetVisible = Boolean(initialAlertId) &&
+        visible.some((alert) => alert.id === initialAlertId);
+
+    useEffect(() => {
+        if (!targetVisible) return;
+
+        const article = alertTargetRef.current;
+        article?.focus({ preventScroll: true });
+        article?.scrollIntoView({ block: "nearest" });
+    }, [initialAlertId, targetVisible]);
 
     const currentCount = filtered.filter(
         (alert) => alert.status === "current"
@@ -154,9 +166,21 @@ export default function ServiceStatus({ initialRouteId = "", initialTab = "curre
                 </div>
             )}
 
+            {initialAlertId && result &&
+                !alerts.some((alert) => alert.id === initialAlertId) && (
+                    <p role="status">This alert is no longer in the MTA feed.</p>
+                )}
+
             <div className="service-status__list">
                 {visible.map((alert) => (
-                    <article className="app-panel service-alert" key={alert.id}>
+                    <article
+                        key={alert.id}
+                        ref={initialAlertId === alert.id ? alertTargetRef : null}
+                        tabIndex={initialAlertId === alert.id ? -1 : undefined}
+                        className={`app-panel service-alert${
+                            initialAlertId === alert.id ? " service-alert--targeted" : ""
+                        }`}
+                    >
                         <div className="service-alert__header">
                             <div
                                 className="service-alert__routes"

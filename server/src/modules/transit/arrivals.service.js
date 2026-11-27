@@ -228,6 +228,7 @@ export async function getArrivals(stationId, routeId) {
                 tripKey,
                 tripId: trip.tripId,
                 startDate: trip.startDate ?? null,
+                startTime: trip.startTime ?? null,
                 routeId,
                 stopId: stop.stopId,
                 predictedAt: new Date(

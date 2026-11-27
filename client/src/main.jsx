@@ -46,8 +46,8 @@ function App() {
     const [requestedCommute, setRequestedCommute] = useState(null);
     const [statusRequest, setStatusRequest] = useState(null);
 
-    function openAlerts(routeId, tab) {
-        setStatusRequest({ routeId, tab });
+    function openAlerts(routeId, tab, alertId = null) {
+        setStatusRequest({ routeId, tab, alertId });
         setActivePage("status");
     }
 
@@ -124,6 +124,7 @@ function App() {
                             initialRouteId={statusRequest?.routeId}
                             initialTab={statusRequest?.tab}
                             onSignIn={() => setActivePage("settings")}
+                            initialAlertId={statusRequest?.alertId}
                         />
                     </section>
                 )}

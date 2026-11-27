@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import SaveCommute from "./saveCommute.jsx";
 import { AccessibilityPage, StationInfoLinks } from "./stationInfoLinks.jsx";
+import { useServiceAlerts } from "./serviceAlertsContext.jsx";
 
 function getDirectionLabel(stopId, labels, destinationLabels) {
     const destinations = destinationLabels?.[stopId];
@@ -53,6 +54,7 @@ export default function StationArrivals({
     const [selectedArrivalId, setSelectedArrivalId] = useState(null);
     const [now, setNow] = useState(Date.now());
     const [showAccessibility, setShowAccessibility] = useState(false);
+    const { result: alertsResult } = useServiceAlerts();
 
     useEffect(() => {
         if (!accessibilityEnabled) setShowAccessibility(false);
@@ -195,6 +197,42 @@ export default function StationArrivals({
         )
         : "";
 
+        const activeDelayAlerts = (alertsResult?.data.alerts ?? []).filter(
+            (alert) =>
+                /^(delays?|expect delays)$/i.test(alert.type?.trim() ?? "") &&
+                alert.activePeriods?.some(({ start, end }) =>
+                    (start == null || start * 1000 <= now) &&
+                    (end == null || now < end * 1000)
+                )
+        );
+
+        const lineDelayAlerts = activeDelayAlerts.filter((alert) =>
+            alert.targets?.some((target) =>
+                target.routeId === routeId &&
+                !target.tripId &&
+                !target.stopId &&
+                !target.startDate &&
+                !target.startTime &&
+                target.directionId == null &&
+                target.routeType == null
+            )
+        );
+
+        function getTripDelayAlerts(arrival) {
+            return activeDelayAlerts.filter((alert) =>
+                alert.targets?.some((target) =>
+                    Boolean(target.tripId) &&
+                    target.tripId === arrival.tripId &&
+                    (!target.routeId || target.routeId === routeId) &&
+                    (!target.startDate || target.startDate === arrival.startDate) &&
+                    (!target.startTime || target.startTime === arrival.startTime) &&
+                    !target.stopId &&
+                    target.directionId == null &&
+                    target.routeType == null
+                )
+            );
+        }
+
     const pageTitle = selectedArrivalId
         ? "Remaining stops"
         : selectedStopId
@@ -304,10 +342,27 @@ export default function StationArrivals({
                 </div>
             ) : !selectedArrivalId ? (
                 <>
+                    {lineDelayAlerts.length > 0 && (
+                        <div className="trip-delay-links">
+                            {lineDelayAlerts.map((alert) => (
+                                <button
+                                    key={alert.id}
+                                    type="button"
+                                    className="trip-delay-link"
+                                    onClick={() => onOpenAlerts(routeId, alert.status, alert.id)}
+                                >
+                                    Delays <span aria-hidden="true">›</span>
+                                </button>
+                            ))}
+                        </div>
+                    )}
                     <div className="trip-list">
-                        {upcoming.map((arrival) => (
+                        {upcoming.map((arrival) => {
+                            const delayAlerts = getTripDelayAlerts(arrival);
+
+                            return (
+                                <div className="trip-list__entry" key={arrival.id}>
                             <button
-                                key={arrival.id}
                                 type="button"
                                 className="trip-row"
                                 onClick={() => setSelectedArrivalId(arrival.id)}
@@ -333,7 +388,24 @@ export default function StationArrivals({
                                     <span className="trip-row__chevron" aria-hidden="true">›</span>
                                 </span>
                             </button>
-                        ))}
+                                    {delayAlerts.map((alert) => (
+                                        <button
+                                            key={alert.id}
+                                            type="button"
+                                            className="trip-delay-notice"
+                                            onClick={() => {
+                                                const statusRoute = alert.routeIds.includes(routeId)
+                                                    ? routeId
+                                                    : "";
+                                                onOpenAlerts(statusRoute, alert.status, alert.id);
+                                            }}
+                                        >
+                                            {alert.type} <span aria-hidden="true">›</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            );
+                        })}
                     </div>
 
                     {canShowPredictions && upcoming.length === 0 && (
