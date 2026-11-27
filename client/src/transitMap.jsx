@@ -7,6 +7,7 @@ import { getRouteStyle, routeColors } from "./routeColors.js";
 import { startAutoRefresh } from "./autoRefresh.js";
 import StationArrivals from "./stationArrivals.jsx";
 import { StationInfoOnly } from "./stationInfoLinks.jsx";
+import AccessibilityDetails from "./accessibilityDetails.jsx";
 
 const MAP_MIN_ZOOM = 12;
 const STATION_INTERACTION_ZOOM = 12.5;
@@ -111,7 +112,10 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
     const [selectedStation, setSelectedStation] = useState(null);
     const [stations, setStations] = useState([]);
     const [query, setQuery] = useState("");
+    const [searchOpen, setSearchOpen] = useState(false);
+    const searchRef = useRef(null);
     const [accessibilityMode, setAccessibilityMode] = useState(false);
+    const [showAccessibilityOptions, setShowAccessibilityOptions] = useState(false);
     const [adaOnly, setAdaOnly] = useState(false);
     const [stationStatus, setStationStatus] = useState("loading");
     const [selectedRouteId, setSelectedRouteId] = useState(null);
@@ -174,6 +178,26 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
         setQuery("");
         setTripSelection(null);
     }
+
+    useEffect(() => {
+        if (!searchOpen) return;
+
+        function handlePointerDown(event) {
+            const root = searchRef.current;
+            if (!root || !(event.target instanceof Element)) return;
+
+            const insideSearch =
+                root.contains(event.target) &&
+                event.target.closest('input[type="search"], .station-search__results');
+
+            if (!insideSearch) setSearchOpen(false);
+        }
+
+        document.addEventListener("pointerdown", handlePointerDown, true);
+        return () => {
+            document.removeEventListener("pointerdown", handlePointerDown, true);
+        };
+    }, [searchOpen]);
 
     useEffect(() => {
         if (!requestedCommute || stationStatus !== "ready" || openedCommuteRef.current === requestedCommute) return;
@@ -785,7 +809,7 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
     const searchTerm = query.trim().toLowerCase();
 
     const shouldShowResults =
-        stationStatus === "ready" && (Boolean(searchTerm) || effectiveAdaOnly);
+        stationStatus === "ready" && searchOpen && (Boolean(searchTerm) || effectiveAdaOnly);
     const matches = shouldShowResults
         ? stations.filter((station) => {
             const nameMatches =
@@ -796,159 +820,96 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
         : [];
 
     const stationAccessibility =
-        selectedStation && accessibilityMode
-            ? (() => {
-                const acc = selectedStation.properties.accessibility;
-
-                if (!acc) {
-                    return (
-                        <div
-                            className="station-accessibility"
-                            aria-label="Elevator and escalator accessibility"
-                        >
-                            <p>
-                                <strong>Summary:</strong> Status unavailable
-                            </p>
-                        </div>
-                    );
+        selectedStation && accessibilityMode ? (
+            <AccessibilityDetails
+                accessibility={selectedStation.properties.accessibility}
+                label={
+                    ADA_LABELS[
+                        selectedStation.properties.accessibility?.adaStatus
+                    ] ?? "Accessibility status unavailable"
                 }
-
-                const outageKnown = acc.outageFeedAvailable !== false;
-                const adaLabel = ADA_LABELS[acc.adaStatus] ?? acc.adaStatus;
-                const cleanNotes = formatAdaNotes(acc.adaNotes);
-                const adaContextNote = getAdaContextNote(acc.adaStatus);
-
-                const activeOutages = outageKnown
-                    ? [
-                        ...(acc.elevatorsOutOfService ?? []),
-                        ...(acc.escalatorsOutOfService ?? []),
-                    ]
-                    : [];
-
-                const availableElevators = outageKnown
-                    ? (acc.availableElevators ?? [])
-                    : [];
-                const upcomingOutages = outageKnown
-                    ? (acc.upcomingOutages ?? [])
-                    : [];
-
-                const summaryText = !outageKnown
-                    ? `${adaLabel} · Status unavailable`
-                    : acc.hasOutage
-                        ? `${adaLabel} · ${acc.elevatorsOutOfServiceCount ?? 0} elevator & ${acc.escalatorsOutOfServiceCount ?? 0} escalator outage(s)`
-                        : `${adaLabel} · No active outages`;
-
-                return (
-                    <div
-                        className="station-accessibility"
-                        aria-label="Elevator and escalator accessibility"
-                    >
-                        <p>
-                            <strong>Summary:</strong> {summaryText}
-                        </p>
-
-                        {adaContextNote && <p>{adaContextNote}</p>}
-                        {cleanNotes && <p>{cleanNotes}</p>}
-
-                        <details className="station-accessibility__details">
-                            <summary>Equipment & outage details</summary>
-                            {!outageKnown ? (
-                                <p>Status unavailable</p>
-                            ) : (
-                                <>
-                                    {acc.equipmentFeedAvailable !== false && (
-                                        <div className="station-accessibility__available">
-                                            <p>
-                                                <strong>
-                                                    Available elevators (
-                                                    {availableElevators.length}):
-                                                </strong>
-                                            </p>
-
-                                            {availableElevators.length > 0 ? (
-                                                <ul>
-                                                    {availableElevators.map((el, idx) => (
-                                                        <li key={`${el.equipment}-${idx}`}>
-                                                            <strong>{el.equipment}</strong> —{" "}
-                                                            {el.serving}
-                                                            {el.isAda ? " (ADA)" : ""}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            ) : (
-                                                <p>No available elevators listed.</p>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {acc.hasOutage ? (
-                                        <div>
-                                            <p>
-                                                <strong>Out of service:</strong>{" "}
-                                                {acc.elevatorsOutOfServiceCount ?? 0}{" "}
-                                                elevator(s),{" "}
-                                                {acc.escalatorsOutOfServiceCount ?? 0}{" "}
-                                                escalator(s)
-                                            </p>
-
-                                            {renderOutageList(activeOutages)}
-                                        </div>
-                                    ) : (
-                                        <p>No active elevator or escalator outages.</p>
-                                    )}
-
-                                    {upcomingOutages.length > 0 && (
-                                        <div className="station-accessibility__upcoming">
-                                            <p>
-                                                <strong>
-                                                    Upcoming planned outage(s) (
-                                                    {upcomingOutages.length}):
-                                                </strong>
-                                            </p>
-
-                                            {renderOutageList(upcomingOutages)}
-                                        </div>
-                                    )}
-                                </>
-                            )}
-                        </details>
-                    </div>
-                );
-            })()
-            : null;
+                contextNote={getAdaContextNote(
+                    selectedStation.properties.accessibility?.adaStatus
+                )}
+                notes={formatAdaNotes(
+                    selectedStation.properties.accessibility?.adaNotes ?? ""
+                )}
+            />
+        ) : null;
 
     return (
         <section className="transit-map">
             <div ref={containerRef} className="transit-map__canvas" />
 
-                <div className="station-search">
+                <div
+                    className="station-search"
+                    ref={searchRef}
+                    onBlur={(event) => {
+                        const next = event.relatedTarget;
+                        const staysInSearch =
+                            next instanceof Element &&
+                            event.currentTarget.contains(next) &&
+                            next.closest('input[type="search"], .station-search__results');
+
+                        if (!staysInSearch) setSearchOpen(false);
+                    }}
+                    onKeyDown={(event) => {
+                        if (event.key === "Escape" && searchOpen) {
+                            event.preventDefault();
+                            searchRef.current?.querySelector('input[type="search"]')?.focus();
+                            setSearchOpen(false);
+                        }
+                    }}
+                >
                     <div className="station-search__controls">
                         <input
                             type="search"
                             aria-label="Search stations"
                             placeholder="Search stations..."
                             value={query}
-                            onChange={(e) => setQuery(e.target.value)}
+                            onFocus={() => {
+                                setSearchOpen(true);
+                                setShowAccessibilityOptions(false);
+                            }}
+                            onClick={() => setSearchOpen(true)}
+                            onChange={(event) => {
+                                setQuery(event.target.value);
+                                setSearchOpen(true);
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === "ArrowDown" && shouldShowResults) {
+                                    const first = searchRef.current?.querySelector(
+                                        ".station-search__results button:not(:disabled)[data-station-result]"
+                                    );
+
+                                    if (first) {
+                                        event.preventDefault();
+                                        first.focus();
+                                    }
+                                }
+                            }}
                             disabled={stationStatus !== "ready"}
                         />
-                        <button
-                            type="button"
-                            className="station-search__mode-toggle"
-                            aria-pressed={accessibilityMode}
-                            disabled={stationStatus !== "ready"}
-                            onClick={() => setAccessibilityMode((prev) => !prev)}
+                        <div
+                            className="accessibility-control"
+                            onKeyDown={(event) => {
+                                if (event.key === "Escape") {
+                                    setShowAccessibilityOptions(false);
+                                    event.currentTarget.querySelector("button")?.focus();
+                                }
+                            }}
                         >
-                            {accessibilityMode ? "Accessibility: ON" : "Accessibility"}
-                        </button>
-                        {accessibilityMode && (
                             <button
                                 type="button"
-                                className="station-search__ada-toggle"
-                                aria-pressed={adaOnly}
+                                className="accessibility-control__button"
+                                aria-label="Accessibility options"
+                                aria-expanded={showAccessibilityOptions}
+                                aria-controls="accessibility-options"
+                                data-active={accessibilityMode}
                                 disabled={stationStatus !== "ready"}
-                                aria-label="Filter search results to step-free stations"
-                                title="Step-free stations"
-                                onClick={() => setAdaOnly((prev) => !prev)}
+                                onClick={() =>
+                                    setShowAccessibilityOptions((previous) => !previous)
+                                }
                             >
                                 <svg
                                     width="24"
@@ -965,7 +926,44 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
                                     <path d="M4 9l8 2 8-2 M12 11v5 M12 16l-4 5 M12 16l4 5" />
                                 </svg>
                             </button>
-                        )}
+
+                            {showAccessibilityOptions && (
+                                <div
+                                    id="accessibility-options"
+                                    className="accessibility-options"
+                                    role="region"
+                                    aria-label="Accessibility options"
+                                >
+                                    <strong>Accessibility</strong>
+
+                                    <label>
+                                        <span>Show accessibility information</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={accessibilityMode}
+                                            onChange={(event) => {
+                                                const enabled = event.target.checked;
+                                                setAccessibilityMode(enabled);
+
+                                                if (!enabled) setAdaOnly(false);
+                                            }}
+                                        />
+                                    </label>
+
+                                    <label>
+                                        <span>Search step-free stations only</span>
+                                        <input
+                                            type="checkbox"
+                                            checked={accessibilityMode && adaOnly}
+                                            disabled={!accessibilityMode}
+                                            onChange={(event) =>
+                                                setAdaOnly(event.target.checked)
+                                            }
+                                        />
+                                    </label>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {shouldShowResults && (
@@ -1005,7 +1003,11 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
                                             key={station.properties.id}
                                             type="button"
                                             disabled={isStationBlocked(station)}
-                                            onClick={() => selectStation(station)}
+                                            data-station-result
+                                                onClick={() => {
+                                                    selectStation(station);
+                                                    setSearchOpen(false);
+                                                }}
                                         >
                                             <span>
                                                 {station.properties.name}
