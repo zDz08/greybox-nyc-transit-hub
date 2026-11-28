@@ -1,3 +1,4 @@
+import { clearUserResults, forgetResults, initResults } from "./commuteResultsCache.js";
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./firebaseAuth.js";
@@ -28,6 +29,7 @@ export function AccountProvider({ children }) {
     const [session, setSession] = useState({ status: auth ? "loading" : "unavailable", user: null });
     const [retry, setRetry] = useState(0);
     const [mutation, setMutation] = useState({ busy: false, error: "" });
+    const cacheOwner = useRef(null);
     const sessionVersion = useRef(0);
     const pendingMutation = useRef(null);
 
@@ -36,6 +38,11 @@ export function AccountProvider({ children }) {
         let controller;
 
         const unsubscribe = onAuthStateChanged(auth, async (user) => {
+            if (cacheOwner.current && cacheOwner.current !== user?.uid) {
+                clearUserResults(cacheOwner.current);
+            }
+            cacheOwner.current = user?.uid ?? null;
+            if (user) initResults(user.uid);
             const version = ++sessionVersion.current;
             controller?.abort();
             pendingMutation.current = null;
@@ -85,6 +92,7 @@ export function AccountProvider({ children }) {
                 }
             );
             if (version === sessionVersion.current) {
+                if (remove) forgetResults(session.user.uid, commute.id);
                 setSession({ ...session, profile });
                 return true;
             }

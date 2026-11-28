@@ -1,3 +1,4 @@
+import { readResults, writeResults } from "./commuteResultsCache.js";
 import React, { useEffect, useState } from "react";
 import { useAccount } from "./accountContext.jsx";
 import { useServiceAlerts } from "./serviceAlertsContext.jsx";
@@ -94,6 +95,10 @@ export function CommutePlanner() {
                 type="button"
                 aria-expanded={open}
                 onClick={() => {
+                    if (open) {
+                        setFrom("");
+                        setTo("");
+                    }
                     setError("");
                     setOpen(!open);
                 }}
@@ -137,36 +142,49 @@ export function CommutePlanner() {
 }
 
 export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
-    const { changeSavedCommute, mutation } = useAccount();
+    const { session, changeSavedCommute, mutation } = useAccount();
+    const uid = session.user.uid;
     const [origin, destination] = endpoints(plan);
     const [open, setOpen] = useState(false);
-    const [options, setOptions] = useState(null);
+    const [snapshot, setSnapshot] = useState(() => readResults(uid, plan.id));
     const [selected, setSelected] = useState(null);
     const [error, setError] = useState("");
-    const [retry, setRetry] = useState(0);
+    const [loading, setLoading] = useState(false);
+    const [refresh, setRefresh] = useState(false);
+    const [retryToken, setRetryToken] = useState(0);
+    const options = snapshot?.routes;
 
     useEffect(() => {
         if (!open) return;
+        const cached = readResults(uid, plan.id);
+        if (cached && !refresh) {
+            setSnapshot(cached);
+            setLoading(false);
+            return;
+        }
 
         const controller = new AbortController();
         const params = new URLSearchParams({ from: origin.id, to: destination.id });
-
+        setLoading(true);
+        const generatedAt = Date.now();
         readPlanner("?" + params, controller.signal)
             .then((routes) => {
-                if (!controller.signal.aborted) setOptions(routes);
+                if (controller.signal.aborted) return;
+                const next = { routes, generatedAt };
+                writeResults(uid, plan.id, next);
+                setSnapshot(next);
+                setSelected(null);
+                setRefresh(false);
+                setLoading(false);
             })
             .catch((error) => {
-                if (!controller.signal.aborted) setError(error.message);
+                if (controller.signal.aborted) return;
+                setError(error.message);
+                setLoading(false);
             });
 
         return () => controller.abort();
-    }, [open, origin.id, destination.id, retry]);
-
-    function clearResults() {
-        setOptions(null);
-        setSelected(null);
-        setError("");
-    }
+    }, [open, origin.id, destination.id, uid, plan.id, refresh, retryToken]);
 
     return (
         <li className="app-panel commute-planner">
@@ -178,7 +196,8 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
                 className="app-primary"
                 aria-expanded={open}
                 onClick={() => {
-                    clearResults();
+                    setError("");
+                    setRefresh(false);
                     setOpen(!open);
                 }}
             >
@@ -187,7 +206,8 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
             {open && (
                 <>
                     {error && <p role="alert">{error}</p>}
-                    {!error && !options && <p role="status">Finding routes…</p>}
+                    {snapshot && <small>Calculated {formatTime(snapshot.generatedAt)}</small>}
+                    {loading && <p role="status">Finding routes…</p>}
                     {options?.length === 0 && (
                         <p>No scheduled trip arrives in the next 12 hours.</p>
                     )}
@@ -195,12 +215,14 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
                         <button
                             type="button"
                             className="saved-commute__remove"
+                            disabled={loading}
                             onClick={() => {
-                                clearResults();
-                                setRetry((previous) => previous + 1);
+                                setError("");
+                                setRefresh(true);
+                                setRetryToken((previous) => previous + 1);
                             }}
                         >
-                            {error ? "Try again" : "Check again"}
+                            {error ? "Try again" : "Regenerate routes"}
                         </button>
                     )}
                     {options?.map((option) => (
@@ -253,7 +275,7 @@ function ItineraryDetails({ plan, onOpen, onOpenAlerts }) {
                     stopId: leg.stopId,
                 };
                 const lineAlerts = (result?.data.alerts ?? []).filter((alert) =>
-                    alert.routeIds.includes(leg.routeId)
+                    alert.routeIds.includes(leg.routeId),
                 );
                 const tab = lineAlerts.some((alert) => alert.status === "current")
                     ? "current"
