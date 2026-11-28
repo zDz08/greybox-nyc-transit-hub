@@ -206,17 +206,10 @@ export default function StationArrivals({
             )
     );
 
-    const lineDelayAlerts = activeDelayAlerts.filter((alert) =>
-        alert.targets?.some((target) =>
-            target.routeId === routeId &&
-            !target.tripId &&
-            !target.stopId &&
-            !target.startDate &&
-            !target.startTime &&
-            target.directionId == null &&
-            target.routeType == null
-        )
+    const lineAlerts = (alertsResult?.data.alerts ?? []).filter((alert) =>
+        alert.routeIds.includes(routeId)
     );
+    const hasCurrentLineAlert = lineAlerts.some((alert) => alert.status === "current");
 
     function getTripDelayAlerts(arrival) {
         return activeDelayAlerts.filter((alert) =>
@@ -231,52 +224,6 @@ export default function StationArrivals({
                 target.routeType == null
             )
         );
-    }
-
-    function getSkippedStopAlert(arrival, stop) {
-        // The platform suffix and alert direction mapping are verified for route 1.
-        if (routeId !== "1" || !stop.name || !stop.stopId) return null;
-
-        const platformDirection = stop.stopId.slice(-1);
-        if (platformDirection !== "N" && platformDirection !== "S") return null;
-
-        const directionId = platformDirection === "S" ? 1 : 0;
-        const directionWord = platformDirection === "S" ? "downtown" : "uptown";
-        const parentStopId = stop.stopId.slice(0, -1);
-        const stopTime = Date.parse(stop.arrivalAt ?? stop.departureAt) / 1000;
-
-        if (!Number.isFinite(stopTime)) return null;
-
-        return (alertsResult?.data.alerts ?? []).find((alert) => {
-            if (alert.type !== "Planned - Stops Skipped") return false;
-
-            const headline = alert.title?.match(
-                /\b(uptown|downtown)\s+\[1\]\s+skips?\s+(.+)$/i
-            );
-            if (headline?.[1].toLowerCase() !== directionWord) return false;
-
-            const skippedNames = headline[2]
-                .replace(/[.!]$/, "")
-                .split(/,\s*|\s+and\s+/i)
-                .map((name) => name.trim().toLowerCase());
-
-            if (!skippedNames.includes(stop.name.trim().toLowerCase())) return false;
-
-            const matchesTarget = alert.targets?.some((target) =>
-                target.routeId === routeId &&
-                (target.stopId === stop.stopId || target.stopId === parentStopId) &&
-                target.directionId != null &&
-                Number(target.directionId) === directionId &&
-                (!target.tripId || target.tripId === arrival.tripId) &&
-                (!target.startDate || target.startDate === arrival.startDate) &&
-                (!target.startTime || target.startTime === arrival.startTime)
-            );
-
-            return matchesTarget && alert.activePeriods?.some(({ start, end }) =>
-                (start == null || start <= stopTime) &&
-                (end == null || stopTime < end)
-            );
-        }) ?? null;
     }
 
     const pageTitle = selectedArrivalId
@@ -399,23 +346,23 @@ export default function StationArrivals({
                 </div>
             ) : !selectedArrivalId ? (
                 <>
-                    {(lineDelayAlerts.length > 0 || canShowPredictions) && (
+                    {(lineAlerts.length > 0 || canShowPredictions) && (
                         <div className="trip-list__status-row">
-                            {lineDelayAlerts.length > 0 && (
-                                <div className="trip-delay-links">
-                                    {lineDelayAlerts.map((alert) => (
-                                        <button
-                                            key={alert.id}
-                                            type="button"
-                                            className="trip-delay-link"
-                                            onClick={() => onOpenAlerts(routeId, alert.status, alert.id)}
-                                        >
-                                            <span className="trip-delay-link__icon" aria-hidden="true">⚠</span>
-                                            <span>Delays</span>
-                                            <span aria-hidden="true">›</span>
-                                        </button>
-                                    ))}
-                                </div>
+                            {lineAlerts.length > 0 && (
+                                <button
+                                    type="button"
+                                    className="trip-alert-link"
+                                    onClick={() =>
+                                        onOpenAlerts(
+                                            routeId,
+                                            hasCurrentLineAlert ? "current" : "upcoming"
+                                        )
+                                    }
+                                >
+                                    <span className="trip-alert-link__icon" aria-hidden="true">⚠</span>
+                                    <span>Alert</span>
+                                    <span aria-hidden="true">›</span>
+                                </button>
                             )}
 
                             {canShowPredictions && (
@@ -442,7 +389,7 @@ export default function StationArrivals({
                                     <span>
                                         {formatArrivalTime(arrival.predictedAt)}
                                         {" · "}
-                                        {arrival.remainingStops?.length ?? 0} stops
+                                        {arrival.remainingStops?.filter((stop) => !stop.skipped).length ?? 0} stops
                                     </span>
                                 </span>
 
@@ -507,18 +454,15 @@ export default function StationArrivals({
 
                     {selectedArrival.path?.status === "single-stop" && (
                         <p className="route-selection__note">
-                            Only this station remains in the reported stop list.
+                            Only this station remains as a reported stop for this train.
                         </p>
                     )}
 
                     <ol className="trip-stops">
                         {(selectedArrival.remainingStops ?? []).map((stop, index) => {
-                            const skippedAlert = getSkippedStopAlert(selectedArrival, stop);
-
                             return (
                                 <li
                                     key={`${stop.stopId ?? "unknown"}:${index}`}
-                                    className={skippedAlert ? "trip-stops__row--skipped" : undefined}
                                 >
                                     <span className="trip-stops__number">
                                         {index + 1}
@@ -531,19 +475,8 @@ export default function StationArrivals({
                                     </span>
 
                                     <span className="trip-stops__time">
-                                        {skippedAlert ? (
-                                            <button
-                                                type="button"
-                                                className="trip-stops__alert-link"
-                                                aria-label={`View service alert: ${stop.name} skipped`}
-                                                onClick={() => onOpenAlerts(
-                                                    routeId,
-                                                    skippedAlert.status,
-                                                    skippedAlert.id
-                                                )}
-                                            >
-                                                Skipped
-                                            </button>
+                                        {stop.skipped === true ? (
+                                            <strong className="trip-stops__skipped">Skipped</strong>
                                         ) : (
                                             formatArrivalTime(stop.arrivalAt)
                                         )}

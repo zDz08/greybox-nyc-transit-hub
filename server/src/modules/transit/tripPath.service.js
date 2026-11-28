@@ -148,6 +148,39 @@ function clipShape(feature, remainingStops) {
     ];
 }
 
+// Compare the directed polyline, not how densely it was sampled. This
+// tolerance is only for coordinate arithmetic (well below a millimeter).
+function pathSignature(coordinates) {
+    const points = [];
+    const epsilon = 1e-10;
+
+    for (const point of coordinates) {
+        const previous = points.at(-1);
+        if (previous && previous[0] === point[0] && previous[1] === point[1]) continue;
+
+        while (points.length >= 2) {
+            const [ax, ay] = points.at(-2);
+            const [bx, by] = points.at(-1);
+            const dx = point[0] - ax;
+            const dy = point[1] - ay;
+            const length = Math.hypot(dx, dy);
+            if (length === 0) break;
+
+            const along = (bx - ax) * dx + (by - ay) * dy;
+            const cross = (bx - ax) * dy - (by - ay) * dx;
+            // Keep reversals, including a turn back along the same track.
+            if (along < 0 || along > dx * dx + dy * dy || Math.abs(cross) > epsilon * length) {
+                break;
+            }
+            points.pop();
+        }
+
+        points.push(point);
+    }
+
+    return JSON.stringify(points.map(([x, y]) => [x.toFixed(10), y.toFixed(10)]));
+}
+
 export async function getTripPath(routeId, remainingStops, tripId = null) {
     if (!Array.isArray(remainingStops) || remainingStops.length === 0) {
         return { status: "unavailable", reason: "no-stops" };
@@ -219,13 +252,7 @@ export async function getTripPath(routeId, remainingStops, tripId = null) {
             };
         }
 
-        const signature = JSON.stringify(
-            coordinates.map((coordinate) =>
-                coordinate.map((value) =>
-                    Number(value.toFixed(5))
-                )
-            )
-        );
+        const signature = pathSignature(coordinates);
 
         if (!paths.has(signature)) {
             paths.set(signature, {

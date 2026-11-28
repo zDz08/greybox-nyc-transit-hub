@@ -221,7 +221,7 @@ export async function getArrivals(stationId, routeId) {
                 stationIds
             );
 
-            const lastStop = remainingStops.at(-1);
+            const lastStop = remainingStops.findLast((item) => !item.skipped);
 
             direction.arrivals.push({
                 id: callKey,
@@ -260,7 +260,7 @@ export async function getArrivals(stationId, routeId) {
             try {
                 arrival.path = await getTripPath(
                     routeId,
-                    arrival.remainingStops,
+                    arrival.remainingStops.filter((item) => !item.skipped),
                     arrival.tripId
                 );
             } catch (error) {

@@ -154,6 +154,7 @@ export default function TransitMap({ requestedCommute, onSignIn, onOpenAlerts })
     const tripStationIds = useMemo(
         () => new Set(
             (activeTrip?.remainingStops ?? [])
+                .filter((stop) => !stop.skipped)
                 .map((stop) => stop.stationId)
                 .filter(Boolean)
         ),
