@@ -4,7 +4,25 @@ import { getRouteShapes } from "./routeShapes.service.js"
 import { getArrivals } from "./arrivals.service.js";
 import { getServiceAlerts } from "./serviceAlerts.service.js";
 
+import { findOptions, getIndex } from "./commutePlanner.js";
+
 const router = Router();
+
+router.get("/commute-planner", async (req, res, next) => {
+    try {
+        const { from, to } = req.query;
+        const index = await getIndex();
+        if (from === undefined && to === undefined) {
+            return res.json({ data: index.stations });
+        }
+        if (!index.names.has(from) || !index.names.has(to) || from === to) {
+            return res.status(400).json({ error: { message: "Choose two different subway stations." } });
+        }
+        res.json({ data: findOptions(index, from, to) });
+    } catch (error) {
+        next(error);
+    }
+});
 
 router.get("/stations", async(req, res, next) => {
     try {

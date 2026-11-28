@@ -2,6 +2,8 @@ import { Router } from "express";
 import { requireAuth } from "../auth/requireAuth.js";
 import { getUserProfile, parseSavedCommute, removeCommute, saveCommute } from "./users.service.js";
 
+import { findOptions, getIndex } from "../transit/commutePlanner.js";
+
 const router = Router();
 
 router.use((req, res, next) => {
@@ -21,6 +23,20 @@ router.get("/me", async (req, res) => {
 });
 
 router.put("/me/saved-commutes/:commuteId", async (req, res) => {
+    if (/^plan-[a-f0-9]{32}$/.test(req.params.commuteId)) {
+        try {
+            const { from, to } = req.body ?? {};
+            const options = findOptions(await getIndex(), from, to);
+            const plan = options.find(item => item.id === req.params.commuteId);
+            if (!plan) {
+                return res.status(400).json({ error: { message: "Find routes again before saving." } });
+            }
+            return res.json({ data: await saveCommute(req.auth, plan) });
+        } catch {
+            return res.status(503).json({ error: { message: "Could not save this itinerary." } });
+        }
+    }
+
     const commute = parseSavedCommute(req.body);
     if (!commute || commute.id !== req.params.commuteId) {
         return res.status(400).json({ error: {
@@ -40,7 +56,7 @@ router.put("/me/saved-commutes/:commuteId", async (req, res) => {
 });
 
 router.delete("/me/saved-commutes/:commuteId", async (req, res) => {
-    if (!/^[A-Za-z0-9_-]{1,20}:[A-Z0-9]{1,4}:[A-Za-z0-9_-]{1,20}[NS]$/.test(req.params.commuteId)) {
+    if (!/^plan-[a-f0-9]{32}$/.test(req.params.commuteId) && !/^[A-Za-z0-9_-]{1,20}:[A-Z0-9]{1,4}:[A-Za-z0-9_-]{1,20}[NS]$/.test(req.params.commuteId)) {
         return res.status(400).json({ error: {
             code: "INVALID_COMMUTE",
             message: "A valid saved commute ID is required.",

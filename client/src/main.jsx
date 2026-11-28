@@ -101,6 +101,7 @@ function App() {
                         </header>
 
                         <SavedCommutes
+                            onOpenAlerts={openAlerts}
                             onExplore={() => setActivePage("map")}
                             onSignIn={() => setActivePage("settings")}
                             onOpen={(commute) => {

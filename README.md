@@ -157,3 +157,5 @@ npm run test:accounts --prefix server
 ```
 
 The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, password recovery without losing saved commutes, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
+
+Saved → Add commute uses scheduled subway patterns and directed transfer pairs to suggest direct rides and rides with one transfer. Copy `transfers.txt` from the same static GTFS release as `trips.txt` into `server/data/gtfs/`, then restart the server. Options describe usual routes, not connections guaranteed for a particular departure. Existing saved directions remain available.

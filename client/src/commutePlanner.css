@@ -1,0 +1,36 @@
+.commute-planner,
+.commute-planner form,
+.commute-planner label,
+.commute-option {
+    display: grid;
+    gap: 0.65rem;
+}
+.commute-planner {
+    margin-block-end: 1rem;
+}
+.commute-planner button {
+    justify-self: start;
+}
+.commute-planner input {
+    min-width: 0;
+    padding: 0.65rem;
+    border: 1px solid #384352;
+    border-radius: 0.6rem;
+    background: #161c23;
+    color: inherit;
+    font: inherit;
+}
+.commute-option {
+    border-top: 1px solid #384352;
+    padding-top: 0.75rem;
+}
+.commute-option p {
+    margin: 0;
+}
+.commute-notice {
+    border: 0;
+    background: transparent;
+    color: #ffbf60;
+    text-align: start;
+    cursor: pointer;
+}

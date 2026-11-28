@@ -34,7 +34,7 @@ export default function ServiceStatus({ initialRouteId = "", initialTab = "curre
 
     const savedRoutes = new Set(
         session.status === "ready"
-            ? (session.profile?.savedCommutes ?? []).map((item) => item.routeId)
+            ? (session.profile?.savedCommutes ?? []).flatMap((item) => item.legs?.map((leg) => leg.routeId) ?? [item.routeId])
             : []
     );
     const savedMessage = routeId !== "saved" ? "" :
