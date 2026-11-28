@@ -322,10 +322,21 @@ export default function StationArrivals({
                     <strong>{pageTitle}</strong>
                 </div>
 
-                {canShowPredictions && (
-                    <span className="station-arrivals__live">
-                        Live estimates
-                    </span>
+                {selectedStopId && !selectedArrivalId ? (
+                    <SaveCommute
+                        key={`${stationId}:${routeId}:${selectedStopId}`}
+                        onSignIn={onSignIn}
+                        commute={{
+                            id: `${stationId}:${routeId}:${selectedStopId}`,
+                            stationId,
+                            stationName,
+                            routeId,
+                            stopId: selectedStopId,
+                            directionLabel,
+                        }}
+                    />
+                ) : canShowPredictions && (
+                    <span className="station-arrivals__live">Live estimates</span>
                 )}
             </div>
 
@@ -388,18 +399,28 @@ export default function StationArrivals({
                 </div>
             ) : !selectedArrivalId ? (
                 <>
-                    {lineDelayAlerts.length > 0 && (
-                        <div className="trip-delay-links">
-                            {lineDelayAlerts.map((alert) => (
-                                <button
-                                    key={alert.id}
-                                    type="button"
-                                    className="trip-delay-link"
-                                    onClick={() => onOpenAlerts(routeId, alert.status, alert.id)}
-                                >
-                                    Delays <span aria-hidden="true">›</span>
-                                </button>
-                            ))}
+                    {(lineDelayAlerts.length > 0 || canShowPredictions) && (
+                        <div className="trip-list__status-row">
+                            {lineDelayAlerts.length > 0 && (
+                                <div className="trip-delay-links">
+                                    {lineDelayAlerts.map((alert) => (
+                                        <button
+                                            key={alert.id}
+                                            type="button"
+                                            className="trip-delay-link"
+                                            onClick={() => onOpenAlerts(routeId, alert.status, alert.id)}
+                                        >
+                                            <span className="trip-delay-link__icon" aria-hidden="true">⚠</span>
+                                            <span>Delays</span>
+                                            <span aria-hidden="true">›</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {canShowPredictions && (
+                                <span className="station-arrivals__live">Live estimates</span>
+                            )}
                         </div>
                     )}
                     <div className="trip-list">
@@ -459,18 +480,6 @@ export default function StationArrivals({
                             No upcoming predictions for this direction.
                         </p>
                     )}
-
-                    <SaveCommute
-                        onSignIn={onSignIn}
-                        commute={{
-                            id: `${stationId}:${routeId}:${selectedStopId}`,
-                            stationId,
-                            stationName,
-                            routeId,
-                            stopId: selectedStopId,
-                            directionLabel,
-                        }}
-                    />
                 </>
             ) : selectedArrival ? (
                 <>
