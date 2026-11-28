@@ -5,6 +5,7 @@ import { getStopDetailsById } from "./gtfsStops.js";
 import { getTripSchedules } from "./tripSchedule.js";
 
 const transfersUrl = new URL("../../../data/gtfs/transfers.txt", import.meta.url);
+const MAX_OPTIONS = 6;
 let indexPromise;
 
 export function buildIndex(trips, stops, transfers) {
@@ -42,8 +43,11 @@ export function buildIndex(trips, stops, transfers) {
         }))
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
+    const { rides, services } = buildRideGraph(patterns.values());
+
     return {
-        patterns: [...patterns.values()],
+        rides,
+        services,
         links,
         stations,
         names: new Map(stations.map((s) => [s.id, s.name])),
@@ -72,99 +76,148 @@ export function getIndex() {
     return indexPromise;
 }
 
+function buildRideGraph(patterns) {
+    const rides = new Map();
+    const services = new Set();
+
+    for (const pattern of patterns) {
+        const { routeId, stops } = pattern;
+        for (const service of pattern.services) services.add(service);
+
+        for (let start = 0; start < stops.length - 1; start++) {
+            const board = stops[start];
+            if (!rides.has(board.stationId)) rides.set(board.stationId, new Map());
+            const departures = rides.get(board.stationId);
+
+            for (let end = start + 1; end < stops.length; end++) {
+                const exit = stops[end];
+                if (exit.stationId === board.stationId) continue;
+
+                const key = [routeId, board.stopId, exit.stopId].join(":");
+                const via = stops.slice(start + 1, end).map((stop) => stop.stationId);
+                const prior = departures.get(key);
+
+                if (prior) {
+                    for (const service of pattern.services) {
+                        const hops = Math.min(
+                            prior.hopsByService.get(service) ?? Infinity,
+                            end - start,
+                        );
+                        prior.hopsByService.set(service, hops);
+                    }
+                    // Only report intermediate stops shared by every matching pattern.
+                    prior.via = prior.via.filter((id) => via.includes(id));
+                } else {
+                    departures.set(key, {
+                        key,
+                        routeId,
+                        board,
+                        exit,
+                        via,
+                        hopsByService: new Map(
+                            [...pattern.services].map((service) => [service, end - start]),
+                        ),
+                    });
+                }
+            }
+        }
+    }
+
+    return { rides, services };
+}
+
+function comparePaths(a, b) {
+    if (a.hops !== b.hops) return a.hops - b.hops;
+    return a.signature < b.signature ? -1 : a.signature > b.signature ? 1 : 0;
+}
+
+function keepBest(paths, candidate) {
+    const existing = paths.findIndex((path) => path.signature === candidate.signature);
+    if (existing !== -1) {
+        if (comparePaths(paths[existing], candidate) <= 0) return;
+        paths.splice(existing, 1);
+    }
+    if (paths.length === MAX_OPTIONS && comparePaths(paths.at(-1), candidate) <= 0) {
+        return;
+    }
+    paths.push(candidate);
+    paths.sort(comparePaths);
+    if (paths.length > MAX_OPTIONS) paths.pop();
+}
+
+function extend(path, ride, hops) {
+    return {
+        signature: path.signature ? path.signature + "|" + ride.key : ride.key,
+        hops: path.hops + hops,
+        parts: [...path.parts, ride],
+    };
+}
+
 export function findOptions(index, from, to) {
     if (from === to || !index.names.has(from) || !index.names.has(to)) return [];
-    const departures = new Map();
-    const arrivals = new Map();
+
+    const start = { signature: "", hops: 0, parts: [] };
+    const results = [];
+    // Keep service IDs separate so all legs share one scheduled service pattern.
+    const searches = [...index.services].map((service) => ({
+        service,
+        visited: new Set([from]),
+        frontier: new Map([[from, [start]]]),
+    }));
+
+    while (searches.some(({ frontier }) => frontier.size)) {
+        for (const { service, frontier } of searches) {
+            for (const [board, paths] of frontier) {
+                for (const ride of index.rides.get(board)?.values() ?? []) {
+                    const hops = ride.hopsByService.get(service);
+                    if (ride.exit.stationId !== to || hops === undefined) continue;
+
+                    for (const path of paths) keepBest(results, extend(path, ride, hops));
+                }
+            }
+        }
+
+        // Every frontier represents the same number of rides. Finish the whole
+        // layer before returning so other options with the same count can compete.
+        if (results.length) break;
+
+        for (const search of searches) {
+            const { service, visited, frontier } = search;
+            const next = new Map();
+
+            for (const [board, paths] of frontier) {
+                for (const ride of index.rides.get(board)?.values() ?? []) {
+                    const hops = ride.hopsByService.get(service);
+                    if (hops === undefined) continue;
+
+                    for (const transfer of index.links.get(ride.exit.stationId) ?? []) {
+                        if (visited.has(transfer) || !index.rides.has(transfer)) continue;
+                        if (!next.has(transfer)) next.set(transfer, []);
+
+                        for (const path of paths) {
+                            keepBest(next.get(transfer), extend(path, ride, hops));
+                        }
+                    }
+                }
+            }
+
+            // Keep alternatives reaching the same station at the same depth;
+            // deeper visits cannot yield a route with fewer transfers.
+            for (const station of next.keys()) visited.add(station);
+            search.frontier = next;
+        }
+    }
+
     const station = (id) => ({ id, name: index.names.get(id) });
 
-    function add(table, junction, trip, start, end) {
-        if (!table.has(junction)) table.set(junction, new Map());
-        const group = table.get(junction);
-        const board = trip.stops[start],
-            exit = trip.stops[end];
-        const key = [trip.routeId, board.stopId, exit.stopId].join(":");
-        const via = trip.stops.slice(start + 1, end).map((s) => s.stationId);
-        const prior = group.get(key);
-        if (prior) {
-            prior.via = prior.via.filter((id) => via.includes(id));
-            for (const service of trip.services) prior.services.add(service);
-            prior.hops = Math.min(prior.hops, end - start);
-            return;
-        }
-        group.set(key, {
-            key,
-            routeId: trip.routeId,
-            board,
-            exit,
-            via,
-            services: new Set(trip.services),
-            hops: end - start,
-        });
-    }
-
-    for (const trip of index.patterns) {
-        const stops = trip.stops;
-        for (let i = 0; i < stops.length; i++) {
-            if (stops[i].stationId === from) {
-                for (let j = i + 1; j < stops.length; j++) {
-                    add(departures, stops[j].stationId, trip, i, j);
-                    if (stops[j].stationId === to) break;
-                }
-            }
-            if (stops[i].stationId === to) {
-                for (let j = i - 1; j >= 0; j--) {
-                    add(arrivals, stops[j].stationId, trip, j, i);
-                    if (stops[j].stationId === from) break;
-                }
-            }
-        }
-    }
-
-    const options = [];
-    function collect(parts) {
-        const signature = parts.map((p) => p.key).join("|");
-        const id = "plan-" + createHash("sha256").update(signature).digest("hex").slice(0, 32);
-        const legs = parts.map((p) => ({
-            routeId: p.routeId,
-            stopId: p.board.stopId,
-            board: station(p.board.stationId),
-            exit: station(p.exit.stationId),
-            via: p.via.map(station),
-        }));
-        options.push({ id, legs, hops: parts.reduce((sum, p) => sum + p.hops, 0) });
-    }
-
-    for (const direct of departures.get(to)?.values() ?? []) collect([direct]);
-    const directHops = Math.min(...options.map((option) => option.hops));
-    for (const [off, first] of departures) {
-        if (off === from || off === to) continue;
-        for (const on of index.links.get(off) ?? []) {
-            if (on === from || on === to) continue;
-            for (const a of first.values()) {
-                for (const b of arrivals.get(on)?.values() ?? []) {
-                    if (a.routeId === b.routeId || a.via.some((id) => b.via.includes(id)))
-                        continue;
-                    if (a.hops + b.hops >= directHops) continue;
-                    if (![...a.services].some((service) => b.services.has(service))) continue;
-                    collect([a, b]);
-                }
-            }
-        }
-    }
-
-    options.sort(
-        (a, b) => a.legs.length - b.legs.length || a.hops - b.hops || a.id.localeCompare(b.id),
-    );
-    // Offer one representative transfer for each line combination.
-    const seen = new Set();
-    return options
-        .filter((option) => {
-            const pair = option.legs.map((l) => l.routeId).join(":");
-            if (seen.has(pair)) return false;
-            seen.add(pair);
-            return true;
-        })
-        .slice(0, 6)
-        .map(({ id, legs }) => ({ id, legs }));
+    return results.map(({ signature, parts }) => ({
+        id: "plan-" + createHash("sha256").update(signature).digest("hex").slice(0, 32),
+        legs: parts.map((ride) => ({
+            routeId: ride.routeId,
+            stopId: ride.board.stopId,
+            board: station(ride.board.stationId),
+            exit: station(ride.exit.stationId),
+            via: ride.via.map(station),
+        })),
+    }));
 }

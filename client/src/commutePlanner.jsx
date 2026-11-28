@@ -12,6 +12,11 @@ async function readPlanner(query, signal) {
     return (await response.json()).data;
 }
 
+function transferLabel(count) {
+    if (count === 0) return "Direct";
+    return count === 1 ? "1 transfer" : `${count} transfers`;
+}
+
 function legText(leg) {
     return leg.routeId + " · " + leg.board.name + " → " + leg.exit.name;
 }
@@ -107,23 +112,23 @@ export function CommutePlanner() {
                         </button>
                     </form>
                     <small>
-                        Scheduled routes · direct or one transfer. Check live service before
+                        Scheduled routes with the fewest transfers. Check live service before
                         leaving.
                     </small>
                     {error && <p role="alert">{error}</p>}
                     {!error && query && !options && <p role="status">Finding routes…</p>}
-                    {options?.length === 0 && <p>No direct or one-transfer route found.</p>}
+                    {options?.length === 0 && (
+                        <p>No scheduled subway route found between these stations.</p>
+                    )}
                     {options?.map((option) => {
                         const saved = session.profile.savedCommutes.some(
                             (c) => c.id === option.id,
                         );
                         return (
                             <div className="commute-option" key={option.id}>
-                                <strong>
-                                    {option.legs.length === 1 ? "Direct" : "1 transfer"}
-                                </strong>
-                                {option.legs.map((leg) => (
-                                    <p key={leg.routeId}>{legText(leg)}</p>
+                                <strong>{transferLabel(option.legs.length - 1)}</strong>
+                                {option.legs.map((leg, i) => (
+                                    <p key={i}>{legText(leg)}</p>
                                 ))}
                                 <button
                                     type="button"
@@ -178,7 +183,7 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
                     .filter(Boolean)
                     .sort((a, b) => a.rank - b.rank);
                 return (
-                    <div key={leg.routeId} className="commute-option">
+                    <div key={i} className="commute-option">
                         <strong>{legText(leg)}</strong>
                         <button
                             type="button"
