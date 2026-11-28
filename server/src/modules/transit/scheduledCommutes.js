@@ -3,7 +3,7 @@ import { getActiveServiceIds } from "./serviceCalendar.js";
 import { getNewYorkTime, getServiceDay } from "./transit.time.js";
 import { getTripSchedules } from "./tripSchedule.js";
 
-export const SEARCH_HOURS = 12;
+const SEARCH_HOURS = 12;
 const HOUR_MS = 3600000;
 
 async function getTripsInWindow(departure, endMs) {
@@ -125,7 +125,6 @@ export function planScheduledJourney(index, trips, from, to, departure) {
 
         for (let leg = arrival; leg?.board; leg = leg.previous?.previous) {
             const key = [leg.routeId, leg.board.stopId, leg.exit.stopId].join(":");
-            const ride = index.rides.get(leg.board.stationId)?.get(key);
             keys.push(key);
 
             legs.push({
@@ -133,7 +132,6 @@ export function planScheduledJourney(index, trips, from, to, departure) {
                 stopId: leg.board.stopId,
                 board: station(leg.board.stationId),
                 exit: station(leg.exit.stationId),
-                via: (ride?.via ?? []).map(station),
                 departureAt: new Date(leg.departure).toISOString(),
                 arrivalAt: new Date(leg.time).toISOString(),
             });

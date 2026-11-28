@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { useAccount } from "./accountContext.jsx";
-import { classifyImpact } from "./commuteImpact.js";
 import { useServiceAlerts } from "./serviceAlertsContext.jsx";
 import "./commutePlanner.css";
 
@@ -187,7 +186,6 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
             </button>
             {open && (
                 <>
-                    <small>Leaving now · New York time · Scheduled estimates</small>
                     {error && <p role="alert">{error}</p>}
                     {!error && !options && <p role="status">Finding routes…</p>}
                     {options?.length === 0 && (
@@ -253,25 +251,13 @@ function ItineraryDetails({ plan, onOpen, onOpenAlerts }) {
                     stationName: leg.board.name,
                     routeId: leg.routeId,
                     stopId: leg.stopId,
-                    destination: { ...leg.exit, via: leg.via },
                 };
-                const notices = (result?.data.alerts ?? [])
-                    .map((alert) => {
-                        const impact = classifyImpact(mapSelection, alert);
-                        if (!impact) return null;
-                        let text = impact.text;
-                        if (
-                            (i > 0 && impact.rank === 0) ||
-                            (i < plan.legs.length - 1 && impact.rank === 1)
-                        ) {
-                            text =
-                                "Transfer stop skipped: " +
-                                (impact.rank === 0 ? leg.board.name : leg.exit.name);
-                        }
-                        return { alert, text, rank: impact.rank };
-                    })
-                    .filter(Boolean)
-                    .sort((a, b) => a.rank - b.rank);
+                const lineAlerts = (result?.data.alerts ?? []).filter((alert) =>
+                    alert.routeIds.includes(leg.routeId)
+                );
+                const tab = lineAlerts.some((alert) => alert.status === "current")
+                    ? "current"
+                    : "upcoming";
                 return (
                     <div key={i} className="commute-option">
                         <strong>{legText(leg)}</strong>
@@ -286,16 +272,15 @@ function ItineraryDetails({ plan, onOpen, onOpenAlerts }) {
                         >
                             View boarding station
                         </button>
-                        {notices.map(({ alert, text }) => (
+                        {lineAlerts.length > 0 && (
                             <button
-                                key={alert.id}
                                 className="commute-notice"
                                 type="button"
-                                onClick={() => onOpenAlerts(leg.routeId, "current", alert.id)}
+                                onClick={() => onOpenAlerts(leg.routeId, tab)}
                             >
-                                {text} · {alert.type} ›
+                                Service alerts · {leg.routeId} ›
                             </button>
-                        ))}
+                        )}
                     </div>
                 );
             })}

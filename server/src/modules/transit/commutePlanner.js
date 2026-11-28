@@ -7,15 +7,10 @@ const transfersUrl = new URL("../../../data/gtfs/transfers.txt", import.meta.url
 let indexPromise;
 
 export function buildIndex(trips, stops, transfers) {
-    const patterns = new Map();
     const routesAt = new Map();
     const transferTimes = new Map();
 
     for (const trip of trips) {
-        const key = [trip.routeId, ...trip.stops.map((s) => s.stopId)].join(":");
-        if (patterns.has(key)) continue;
-        patterns.set(key, trip);
-
         for (const { stationId } of trip.stops) {
             if (!routesAt.has(stationId)) routesAt.set(stationId, new Set());
             routesAt.get(stationId).add(trip.routeId);
@@ -45,7 +40,6 @@ export function buildIndex(trips, stops, transfers) {
         .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
     return {
-        rides: buildViaIndex(patterns.values()),
         transferTimes,
         stations,
         names: new Map(stations.map((s) => [s.id, s.name])),
@@ -72,36 +66,4 @@ export function getIndex() {
             });
     }
     return indexPromise;
-}
-
-function buildViaIndex(patterns) {
-    const rides = new Map();
-
-    for (const pattern of patterns) {
-        const { routeId, stops } = pattern;
-
-        for (let start = 0; start < stops.length - 1; start++) {
-            const board = stops[start];
-            if (!rides.has(board.stationId)) rides.set(board.stationId, new Map());
-            const departures = rides.get(board.stationId);
-
-            for (let end = start + 1; end < stops.length; end++) {
-                const exit = stops[end];
-                if (exit.stationId === board.stationId) continue;
-
-                const key = [routeId, board.stopId, exit.stopId].join(":");
-                const via = stops.slice(start + 1, end).map((stop) => stop.stationId);
-                const prior = departures.get(key);
-
-                if (prior) {
-                    // Only report intermediate stops shared by every matching pattern.
-                    prior.via = prior.via.filter((id) => via.includes(id));
-                } else {
-                    departures.set(key, { via });
-                }
-            }
-        }
-    }
-
-    return rides;
 }

@@ -123,23 +123,3 @@ test("continues the previous service day after midnight", () => {
         "2026-11-28T06:00:00.000Z",
     );
 });
-
-test("reports only intermediate stations shared by matching stop patterns", () => {
-    const trips = [
-        trip("1", [
-            ["A", 0],
-            ["B", 5],
-            ["C", 7],
-            ["D", 10],
-        ]),
-        trip("1", [
-            ["A", 1],
-            ["C", 11],
-            ["D", 15],
-        ]),
-    ];
-    assert.deepEqual(
-        plan(trips)[0].legs[0].via.map((station) => station.id),
-        ["C"],
-    );
-});
