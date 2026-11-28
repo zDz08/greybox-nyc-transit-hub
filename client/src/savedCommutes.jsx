@@ -44,7 +44,7 @@ export default function SavedCommutes({ onOpen, onSignIn, onExplore, onOpenAlert
             ) : (
                 <ul className="saved-commutes">
                     {commutes.map((commute) =>
-                        commute.legs ? (
+                        commute.origin || commute.legs?.length ? (
                             <SavedItinerary
                                 key={commute.id}
                                 plan={commute}

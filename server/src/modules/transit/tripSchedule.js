@@ -65,6 +65,8 @@ async function buildTripSchedules() {
             sequence: Number(stop.stop_sequence),
             arrivalSeconds,
             departureSeconds,
+            ...(stop.pickup_type && stop.pickup_type !== "0" ? { noPickup: true } : {}),
+            ...(stop.drop_off_type && stop.drop_off_type !== "0" ? { noDropOff: true } : {}),
         });
         const sequence = Number(stop.stop_sequence);
 

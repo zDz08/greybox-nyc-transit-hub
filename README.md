@@ -158,4 +158,6 @@ npm run test:accounts --prefix server
 
 The tests create a uniquely named `greybox_accounts_test_...` database and two temporary emulator accounts, then remove them at the end. They cover concurrent first logins and saves, existing profile fields, account isolation, invalid requests, password recovery without losing saved commutes, API restarts, database connection retries, and repeated removal. The account tests use sample station data and can run without the GTFS files.
 
-Saved → Add commute uses scheduled subway patterns and directed transfer pairs to find routes with the fewest transfers. It returns up to six options at that transfer count, ordered by the number of stops ridden. Copy `transfers.txt` from the same static GTFS release as `trips.txt` into `server/data/gtfs/`, then restart the server. Options describe usual routes, not connections guaranteed for a particular departure. Existing saved directions remain available.
+Saved → Add commute saves the origin and destination stations. Opening a saved commute calculates routes for leaving now, using the New York service calendar, exceptions, scheduled stop times, and minimum transfer times. It shows the earliest arrival and the earliest option with the fewest transfers within 12 hours. These estimates do not include live delays or cancellations; service notices are shown separately for a selected route.
+
+Copy `transfers.txt` from the same static GTFS release as `trips.txt` into `server/data/gtfs/`, then restart the server. Keep the service calendar current so it covers the queried dates.

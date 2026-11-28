@@ -4,7 +4,9 @@ import { getRouteShapes } from "./routeShapes.service.js"
 import { getArrivals } from "./arrivals.service.js";
 import { getServiceAlerts } from "./serviceAlerts.service.js";
 
-import { findOptions, getIndex } from "./commutePlanner.js";
+import { getIndex } from "./commutePlanner.js";
+
+import { findScheduledOptions } from "./scheduledCommutes.js";
 
 const router = Router();
 
@@ -18,7 +20,8 @@ router.get("/commute-planner", async (req, res, next) => {
         if (!index.names.has(from) || !index.names.has(to) || from === to) {
             return res.status(400).json({ error: { message: "Choose two different subway stations." } });
         }
-        res.json({ data: findOptions(index, from, to) });
+        res.set("Cache-Control", "no-store");
+        res.json({ data: await findScheduledOptions(index, from, to, new Date()) });
     } catch (error) {
         next(error);
     }

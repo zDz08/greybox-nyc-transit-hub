@@ -34,7 +34,7 @@ export default function ServiceStatus({ initialRouteId = "", initialTab = "curre
 
     const savedRoutes = new Set(
         session.status === "ready"
-            ? (session.profile?.savedCommutes ?? []).flatMap((item) => item.legs?.map((leg) => leg.routeId) ?? [item.routeId])
+            ? (session.profile?.savedCommutes ?? []).flatMap((item) => item.legs?.map((leg) => leg.routeId) ?? (item.routeId ? [item.routeId] : []))
             : []
     );
     const savedMessage = routeId !== "saved" ? "" :
@@ -42,7 +42,7 @@ export default function ServiceStatus({ initialRouteId = "", initialTab = "curre
         session.status === "unavailable" ? "Accounts are unavailable." :
         !session.user ? "Sign in to view alerts for your saved lines." :
         session.status === "error" ? "Could not load your saved lines." :
-        !savedRoutes.size ? "Save a commute to see alerts for your lines here." : "";
+        !savedRoutes.size ? "Save a station direction from the map to see its line alerts here." : "";
 
     const filtered = alerts.filter((alert) =>
         routeId === "saved"

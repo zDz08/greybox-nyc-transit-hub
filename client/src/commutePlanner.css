@@ -17,6 +17,7 @@
     border: 1px solid #384352;
     border-radius: 0.6rem;
     background: #161c23;
+    color-scheme: dark;
     color: inherit;
     font: inherit;
 }
@@ -33,4 +34,22 @@
     color: #ffbf60;
     text-align: start;
     cursor: pointer;
+}
+
+.commute-planner .commute-choice {
+    justify-self: stretch;
+    display: grid;
+    gap: 0.25rem;
+    padding: 0.75rem;
+    border: 1px solid #384352;
+    border-radius: 0.6rem;
+    background: #161c23;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+}
+
+.commute-choice[aria-pressed="true"] {
+    border-color: #ffbf60;
 }

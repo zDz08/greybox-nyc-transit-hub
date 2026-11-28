@@ -5,11 +5,25 @@ import { useServiceAlerts } from "./serviceAlertsContext.jsx";
 import "./commutePlanner.css";
 
 const endpoint = "/api/transit/commute-planner";
+const timeFormatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+});
+
+function formatTime(value) {
+    return timeFormatter.format(new Date(value));
+}
 
 async function readPlanner(query, signal) {
-    const response = await fetch(endpoint + query, { signal });
-    if (!response.ok) throw new Error("Could not load the subway planner.");
-    return (await response.json()).data;
+    const response = await fetch(endpoint + query, { signal, cache: "no-store" });
+    const result = await response.json();
+    if (!response.ok)
+        throw new Error(result.error?.message ?? "Could not load the subway planner.");
+    return result.data;
 }
 
 function transferLabel(count) {
@@ -21,41 +35,58 @@ function legText(leg) {
     return leg.routeId + " · " + leg.board.name + " → " + leg.exit.name;
 }
 
+function endpoints(commute) {
+    return [
+        commute.origin ?? commute.legs?.[0]?.board,
+        commute.destination ?? commute.legs?.at(-1)?.exit,
+    ];
+}
+
 export function CommutePlanner() {
     const { changeSavedCommute, mutation, session } = useAccount();
     const [open, setOpen] = useState(false);
-    const [catalog, setCatalog] = useState([]);
+    const [catalog, setCatalog] = useState(null);
     const [from, setFrom] = useState("");
     const [to, setTo] = useState("");
-    const [query, setQuery] = useState(null);
-    const [options, setOptions] = useState(null);
     const [error, setError] = useState("");
 
     useEffect(() => {
         if (!open) return;
+
         const controller = new AbortController();
-        const suffix = query ? "?" + new URLSearchParams(query) : "";
-        setError("");
-        readPlanner(suffix, controller.signal)
-            .then((data) => {
-                if (!controller.signal.aborted) (query ? setOptions : setCatalog)(data);
+        readPlanner("", controller.signal)
+            .then((stations) => {
+                if (!controller.signal.aborted) setCatalog(stations);
             })
-            .catch(() => {
-                if (!controller.signal.aborted)
-                    setError("Could not load routes. Close and reopen the planner to retry.");
+            .catch((error) => {
+                if (!controller.signal.aborted) setError(error.message);
             });
+
         return () => controller.abort();
-    }, [open, query]);
+    }, [open]);
 
-    function resetResults() {
-        setOptions(null);
-        setQuery(null);
-        setError("");
+    const label = (station) =>
+        station.name + " (" + station.routes.join(", ") + ") · " + station.id;
+    const start = catalog?.find((station) => label(station) === from);
+    const end = catalog?.find((station) => label(station) === to);
+    const canSave = start && end && start.id !== end.id;
+    const alreadySaved =
+        canSave &&
+        session.profile.savedCommutes.some((commute) => {
+            const [origin, destination] = endpoints(commute);
+            return origin?.id === start.id && destination?.id === end.id;
+        });
+
+    async function saveStations(event) {
+        event.preventDefault();
+        if (!canSave || alreadySaved) return;
+
+        if (await changeSavedCommute({ id: `pair-${start.id}:${end.id}` })) {
+            setFrom("");
+            setTo("");
+            setOpen(false);
+        }
     }
-
-    const label = (s) => s.name + " (" + s.routes.join(", ") + ") · " + s.id;
-    const start = catalog.find((s) => label(s) === from);
-    const end = catalog.find((s) => label(s) === to);
 
     return (
         <section className="app-panel commute-planner">
@@ -64,86 +95,43 @@ export function CommutePlanner() {
                 type="button"
                 aria-expanded={open}
                 onClick={() => {
-                    resetResults();
+                    setError("");
                     setOpen(!open);
                 }}
             >
-                {open ? "Close planner" : "Add commute"}
+                {open ? "Cancel" : "Add commute"}
             </button>
-            {open && (
-                <>
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            if (start && end && start.id !== end.id) {
-                                setOptions(null);
-                                setQuery({ from: start.id, to: end.id });
-                            }
-                        }}
-                    >
-                        {[
-                            ["From", from, setFrom],
-                            ["To", to, setTo],
-                        ].map(([title, value, update]) => (
-                            <label key={title}>
-                                {title}
-                                <input
-                                    list="commute-stations"
-                                    placeholder="Choose a station"
-                                    value={value}
-                                    onChange={(e) => {
-                                        resetResults();
-                                        update(e.target.value);
-                                    }}
-                                />
-                            </label>
+            {open && error && <p role="alert">{error}</p>}
+            {open && !error && !catalog && <p role="status">Loading stations…</p>}
+            {open && catalog && (
+                <form onSubmit={saveStations}>
+                    {[
+                        ["From", from, setFrom],
+                        ["To", to, setTo],
+                    ].map(([title, value, update]) => (
+                        <label key={title}>
+                            {title}
+                            <input
+                                list="commute-stations"
+                                placeholder="Choose a station"
+                                value={value}
+                                onChange={(event) => update(event.target.value)}
+                            />
+                        </label>
+                    ))}
+                    <datalist id="commute-stations">
+                        {catalog.map((station) => (
+                            <option value={label(station)} key={station.id} />
                         ))}
-                        <datalist id="commute-stations">
-                            {catalog.map((s) => (
-                                <option value={label(s)} key={s.id} />
-                            ))}
-                        </datalist>
-                        <button
-                            type="submit"
-                            className="app-primary"
-                            disabled={!start || !end || start.id === end.id}
-                        >
-                            Find routes
-                        </button>
-                    </form>
-                    <small>
-                        Scheduled routes with the fewest transfers. Check live service before
-                        leaving.
-                    </small>
-                    {error && <p role="alert">{error}</p>}
-                    {!error && query && !options && <p role="status">Finding routes…</p>}
-                    {options?.length === 0 && (
-                        <p>No scheduled subway route found between these stations.</p>
-                    )}
-                    {options?.map((option) => {
-                        const saved = session.profile.savedCommutes.some(
-                            (c) => c.id === option.id,
-                        );
-                        return (
-                            <div className="commute-option" key={option.id}>
-                                <strong>{transferLabel(option.legs.length - 1)}</strong>
-                                {option.legs.map((leg, i) => (
-                                    <p key={i}>{legText(leg)}</p>
-                                ))}
-                                <button
-                                    type="button"
-                                    className="app-primary"
-                                    disabled={saved || mutation.busy}
-                                    onClick={() =>
-                                        void changeSavedCommute({ id: option.id, ...query })
-                                    }
-                                >
-                                    {saved ? "Saved" : "Save commute"}
-                                </button>
-                            </div>
-                        );
-                    })}
-                </>
+                    </datalist>
+                    <button
+                        type="submit"
+                        className="app-primary"
+                        disabled={!canSave || alreadySaved || mutation.busy}
+                    >
+                        {alreadySaved ? "Already saved" : "Save commute"}
+                    </button>
+                </form>
             )}
         </section>
     );
@@ -151,12 +139,114 @@ export function CommutePlanner() {
 
 export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
     const { changeSavedCommute, mutation } = useAccount();
-    const { result, error } = useServiceAlerts();
+    const [origin, destination] = endpoints(plan);
+    const [open, setOpen] = useState(false);
+    const [options, setOptions] = useState(null);
+    const [selected, setSelected] = useState(null);
+    const [error, setError] = useState("");
+    const [retry, setRetry] = useState(0);
+
+    useEffect(() => {
+        if (!open) return;
+
+        const controller = new AbortController();
+        const params = new URLSearchParams({ from: origin.id, to: destination.id });
+
+        readPlanner("?" + params, controller.signal)
+            .then((routes) => {
+                if (!controller.signal.aborted) setOptions(routes);
+            })
+            .catch((error) => {
+                if (!controller.signal.aborted) setError(error.message);
+            });
+
+        return () => controller.abort();
+    }, [open, origin.id, destination.id, retry]);
+
+    function clearResults() {
+        setOptions(null);
+        setSelected(null);
+        setError("");
+    }
+
     return (
         <li className="app-panel commute-planner">
             <h2>
-                {plan.legs[0].board.name} → {plan.legs.at(-1).exit.name}
+                {origin.name} → {destination.name}
             </h2>
+            <button
+                type="button"
+                className="app-primary"
+                aria-expanded={open}
+                onClick={() => {
+                    clearResults();
+                    setOpen(!open);
+                }}
+            >
+                {open ? "Hide routes" : "View routes"}
+            </button>
+            {open && (
+                <>
+                    <small>Leaving now · New York time · Scheduled estimates</small>
+                    {error && <p role="alert">{error}</p>}
+                    {!error && !options && <p role="status">Finding routes…</p>}
+                    {options?.length === 0 && (
+                        <p>No scheduled trip arrives in the next 12 hours.</p>
+                    )}
+                    {(options || error) && (
+                        <button
+                            type="button"
+                            className="saved-commute__remove"
+                            onClick={() => {
+                                clearResults();
+                                setRetry((previous) => previous + 1);
+                            }}
+                        >
+                            {error ? "Try again" : "Check again"}
+                        </button>
+                    )}
+                    {options?.map((option) => (
+                        <button
+                            key={option.id}
+                            type="button"
+                            className="commute-choice"
+                            aria-pressed={selected?.id === option.id}
+                            onClick={() => setSelected(option)}
+                        >
+                            <strong>{option.labels.join(" · ")}</strong>
+                            <span>{option.legs.map((leg) => leg.routeId).join(" → ")}</span>
+                            <small>
+                                Arrive {formatTime(option.arrivalAt)} ·{" "}
+                                {transferLabel(option.legs.length - 1)}
+                            </small>
+                        </button>
+                    ))}
+                    {selected && (
+                        <ItineraryDetails
+                            plan={selected}
+                            onOpen={onOpen}
+                            onOpenAlerts={onOpenAlerts}
+                        />
+                    )}
+                </>
+            )}
+            <button
+                type="button"
+                className="saved-commute__remove"
+                disabled={mutation.busy}
+                onClick={() => void changeSavedCommute(plan, true)}
+            >
+                Remove commute
+            </button>
+        </li>
+    );
+}
+
+function ItineraryDetails({ plan, onOpen, onOpenAlerts }) {
+    const { result, error } = useServiceAlerts();
+
+    return (
+        <>
             {plan.legs.map((leg, i) => {
                 const mapSelection = {
                     stationId: leg.board.id,
@@ -185,6 +275,10 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
                 return (
                     <div key={i} className="commute-option">
                         <strong>{legText(leg)}</strong>
+                        <small>
+                            Board {formatTime(leg.departureAt)} · Exit{" "}
+                            {formatTime(leg.arrivalAt)}
+                        </small>
                         <button
                             type="button"
                             className="app-primary"
@@ -206,14 +300,6 @@ export function SavedItinerary({ plan, onOpen, onOpenAlerts }) {
                 );
             })}
             {error && <small role="status">{error}</small>}
-            <button
-                type="button"
-                className="saved-commute__remove"
-                disabled={mutation.busy}
-                onClick={() => void changeSavedCommute(plan, true)}
-            >
-                Remove commute
-            </button>
-        </li>
+        </>
     );
 }
