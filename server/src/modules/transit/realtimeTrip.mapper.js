@@ -68,18 +68,15 @@ export function buildRemainingStops(
 ) {
     return orderedStops
         .slice(startIndex)
-        .filter(
-            (stop) =>
-                stop.scheduleRelationship !== "SKIPPED" &&
-                !INTERNAL_STOP_IDS.has(stop.stopId)
-        )
+        .filter((stop) => !INTERNAL_STOP_IDS.has(stop.stopId))
         .map((stop, index) => {
             const details = stopDetails.get(stop.stopId);
-            const noPrediction =
-                stop.scheduleRelationship === "NO_DATA";
+            const skipped = stop.scheduleRelationship === "SKIPPED";
+            const noPrediction = skipped || stop.scheduleRelationship === "NO_DATA";
 
             return {
                 order: index + 1,
+                skipped,
                 stopId: stop.stopId ?? null,
                 stationId: stationIds.get(stop.stopId) ?? null,
                 name: details?.stop_name?.trim() || null,
